@@ -139,7 +139,7 @@ export default function Home() {
       const query = parseJsonField('Query', queryText);
       const body = parseJsonField('Body', bodyText);
 
-      const result = await fetch('/api/test', {
+      const result = await fetch('/api/request', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

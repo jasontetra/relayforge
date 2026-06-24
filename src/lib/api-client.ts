@@ -2,13 +2,13 @@ import { createHash, createPrivateKey, randomUUID } from 'node:crypto';
 
 import { SignJWT } from 'jose';
 
-const DEFAULT_FIREBLOCKS_BASE_URL = 'https://sandbox-api.fireblocks.io';
+const DEFAULT_FIREBLOCKS_BASE_URL = 'https://api.fireblocks.io/v1';
 const DEFAULT_ALLIUM_BASE_URL = 'https://api.allium.so/api';
 const DEFAULT_COINAPI_BASE_URL = 'https://rest.coinapi.io';
 const DEFAULT_BITGO_BASE_URL = 'https://api.bitgo.com';
 const DEFAULT_MOCKOON_BASE_URL = 'http://127.0.0.1:8080';
 
-type RequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+export type RequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type ProviderId = 'fireblocks' | 'allium' | 'coinapi' | 'bitgo';
 export type ServerTarget = 'real' | 'mockoon';
 

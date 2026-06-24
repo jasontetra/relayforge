@@ -1,23 +1,18 @@
 import { NextResponse } from 'next/server';
 
-import { callApi } from '@/lib/fireblocks';
+import { callApi, ProviderId, RequestMethod, ServerTarget } from '@/lib/api-client';
 
 const allowedMethods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
-const allowedProviders = new Set([
-  'fireblocks',
-  'allium',
-  'coinapi',
-  'bitgo',
-]);
-const allowedTargets = new Set(['real', 'mockoon']);
+const allowedProviders = new Set<ProviderId>(['fireblocks', 'allium', 'coinapi', 'bitgo']);
+const allowedTargets = new Set<ServerTarget>(['real', 'mockoon']);
 
 type RequestPayload = {
-  provider?: 'fireblocks' | 'allium' | 'coinapi' | 'bitgo';
+  provider?: ProviderId;
   method?: string;
   path?: string;
   query?: Record<string, string | number | boolean | undefined | null>;
   body?: unknown;
-  target?: 'real' | 'mockoon';
+  target?: ServerTarget;
 };
 
 export async function POST(request: Request) {
@@ -67,7 +62,7 @@ export async function POST(request: Request) {
   try {
     const response = await callApi({
       provider,
-      method: method as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+      method: method as RequestMethod,
       path,
       query: payload.query,
       body: payload.body,
