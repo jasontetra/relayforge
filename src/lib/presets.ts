@@ -137,7 +137,7 @@ export const alliumPresetsGrouped: PresetGroup[] = [
 
 export const coinapiPresetsGrouped: PresetGroup[] = [
   {
-    category: 'Exchange Rates & Assets',
+    category: 'Exchange Rates',
     presets: [
       {
         label: 'Get Exchange Rate',
@@ -146,10 +146,10 @@ export const coinapiPresetsGrouped: PresetGroup[] = [
         path: '/v1/exchangerate/BTC/USD',
       },
       {
-        label: 'List Assets',
+        label: 'Get Base Asset Rates',
         provider: 'coinapi',
         method: 'GET',
-        path: '/v1/assets',
+        path: '/v1/exchangerate/BTC',
       },
     ],
   },

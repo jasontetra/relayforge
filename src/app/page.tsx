@@ -55,8 +55,8 @@ const providerInfo: Record<
   coinapi: {
     label: 'CoinAPI',
     defaultPath: '/v1/exchangerate/BTC/USD',
-    notes: 'Bearer token from COINAPI_API_KEY',
-    authSummary: 'Bearer COINAPI_API_KEY',
+    notes: 'X-CoinAPI-Key header from COINAPI_API_KEY',
+    authSummary: 'X-CoinAPI-Key',
   },
   bitgo: {
     label: 'BitGo',

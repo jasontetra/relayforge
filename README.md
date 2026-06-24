@@ -48,7 +48,7 @@ Open `http://localhost:3000` and use the form to send requests such as:
 
 ## How it works
 
-- The UI posts provider, target, method, path, query, and body JSON to `/api/test`.
+- The UI posts provider, target, method, path, query, and body JSON to `/api/request`.
 - In real mode, the server applies provider-specific auth behavior.
 - Fireblocks JWT claims are `uri`, `nonce`, `iat`, `exp`, `sub`, and `bodyHash`.
 - In mockoon mode, the server forwards the same request path/query/body without provider auth headers.
