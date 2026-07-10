@@ -115,21 +115,54 @@ export const fireblockPresetsGrouped: PresetGroup[] = [
 
 export const alliumPresetsGrouped: PresetGroup[] = [
   {
-    category: 'Address & Transactions',
+    category: 'Wallet',
     presets: [
       {
-        label: 'Get Address',
+        label: 'Wallet Transactions',
+        provider: 'allium',
+        method: 'POST',
+        path: '/api/v1/developer/wallet/transactions',
+        body: '[\n  {\n    "chain": "ethereum",\n    "address": "0x0000000000000000000000000000000000000001"\n  }\n]',
+      },
+      {
+        label: 'Wallet Balances',
+        provider: 'allium',
+        method: 'POST',
+        path: '/api/v1/developer/wallet/balances',
+        body: '[\n  {\n    "chain": "ethereum",\n    "address": "0x0000000000000000000000000000000000000001"\n  }\n]',
+      },
+      {
+        label: 'Wallet Balance History',
+        provider: 'allium',
+        method: 'POST',
+        path: '/api/v1/developer/wallet/balances/history',
+        body: '{\n  "addresses": [\n    {\n      "chain": "ethereum",\n      "address": "0x0000000000000000000000000000000000000001"\n    }\n  ],\n  "start_timestamp": "2024-01-01T00:00:00Z",\n  "end_timestamp": "2024-01-31T23:59:59Z"\n}',
+      },
+    ],
+  },
+  {
+    category: 'Tokens & Assets',
+    presets: [
+      {
+        label: 'List Tokens',
         provider: 'allium',
         method: 'GET',
-        path: '/v1/address/{address}',
+        path: '/api/v1/developer/tokens',
+        query: '{\n  "sort": "volume",\n  "order": "desc",\n  "limit": 200\n}',
+      },
+      {
+        label: 'Token Transfers',
+        provider: 'allium',
+        method: 'GET',
+        path: '/api/v1/developer/tokens/transfers',
         query: '{\n  "chain": "ethereum"\n}',
       },
       {
-        label: 'List Transactions',
+        label: 'Assets',
         provider: 'allium',
         method: 'GET',
-        path: '/v1/transactions',
-        query: '{\n  "chain": "ethereum",\n  "limit": 10\n}',
+        path: '/api/v1/developer/assets',
+        query: '{\n  "chain": "ethereum"\n}',
       },
     ],
   },
