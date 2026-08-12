@@ -18,19 +18,83 @@ ALLIUM_API_KEY=your-allium-api-key
 COINAPI_BASE_URL=https://rest.coinapi.io
 COINAPI_API_KEY=your-coinapi-api-key
 
-BITGO_BASE_URL=https://api.bitgo.com
-BITGO_API_KEY=your-bitgo-api-key
+BITGO_BASE_URL=https://app.bitgo.com
+BITGO_ACCESS_TOKEN=your-bitgo-access-token
+BITGO_ENTERPRISE_ID=your-bitgo-enterprise-id
 ```
 
 Notes:
 
 - `MOCKOON_BASE_URL` defaults to `http://127.0.0.1:8080` when omitted.
 - Fireblocks real mode uses JWT + `X-API-Key`.
-- Allium real mode uses `Bearer ALLIUM_API_KEY`.
+- Allium real mode uses `X-API-KEY` header.
 - CoinAPI real mode uses `X-CoinAPI-Key` header.
-- BitGo real mode uses `Bearer BITGO_API_KEY`.
+- BitGo real mode uses `Bearer BITGO_ACCESS_TOKEN` (`BITGO_API_KEY` still works).
 - `FIREBLOCKS_SECRET_KEY` can use real newlines or escaped `\n` sequences.
 - Keep all secrets server-side only.
+
+### Mock targets
+
+Each provider mock in `unity-dependencies` listens on its own port, so a single
+`MOCKOON_BASE_URL` cannot reach all of them. Set a per-provider override to point
+mockoon mode at the right port; the provider-specific value wins, then
+`MOCKOON_BASE_URL`, then the default.
+
+Point these at Mockoon directly, not at `mock-proxy` on `8080`. The proxy serves
+one provider per process and expects namespaced paths like
+`/_mock/ns/<namespace>/<provider-path>`, so sending a bare provider path there
+returns 404.
+
+```bash
+FIREBLOCKS_MOCKOON_BASE_URL=http://127.0.0.1:9001
+ALLIUM_MOCKOON_BASE_URL=http://127.0.0.1:9002
+COINAPI_MOCKOON_BASE_URL=http://127.0.0.1:9000
+BITGO_MOCKOON_BASE_URL=http://127.0.0.1:9003
+```
+
+## BitGo
+
+BitGo serves the same `/api/v2/...` paths in both modes, so a preset works
+against the real API and the mock without edits.
+
+| | Base URL |
+| --- | --- |
+| Production | `https://app.bitgo.com` |
+| Test | `https://app.bitgo-test.com` |
+| Mock | `http://127.0.0.1:9003` |
+
+Set `BITGO_BASE_URL` to the host only. Paths keep their `/api/v2` prefix, since an
+absolute path replaces any path already on the base URL.
+
+Start the mock from the `unity-dependencies` checkout:
+
+```bash
+npx @mockoon/cli start --data mocks/bitgo/v1/mockoon.json --port 9003
+```
+
+Enterprise-scoped presets use a `{enterpriseId}` placeholder that the server
+substitutes per target: `BITGO_ENTERPRISE_ID` on the real target, and
+`BITGO_MOCK_ENTERPRISE_ID` on mockoon (defaulting to the mock's enterprise).
+Both targets return 404 on the enterprise transfer route for an unrecognized
+enterprise, so the two need different values. `BITGO_ENTERPRISE_ID` is only
+required for requests that actually use the placeholder — currently just the
+enterprise transfer feed, since `GET /api/v2/wallets` accepts an `enterprise`
+query parameter but ignores it.
+
+BitGo presets use ids the mock resolves, so every preset runs unedited in mockoon
+mode. Swap in your own ids for real mode. Other ids the mock knows:
+
+- Coins: `hteth`, `tbtc`
+- Wallets: `59cd72485007a239fae4aa1ffdd5ab52`, `59cd72485007a239fae4aa1ffdd5ab53` (`hteth`), `59cd72485007a239fae4aa1ffdd5ab62` (`tbtc`)
+- Transfers: `aaaa0001000040008fb0000000000001`, `bbbb0001000040008fb0000000000001`, `dddd0001000040008fb0000000000001`
+- Enterprise: `5a7a5c5c5c5c5c5c5c5c5c5c`
+
+To exercise a non-default mock scenario such as `rate_limited`, `unauthorized`,
+`provider_error`, or `malformed_payload`, add it to the Query JSON:
+
+```json
+{ "scenario": "rate_limited" }
+```
 
 ## Run
 
@@ -44,7 +108,7 @@ Open `http://localhost:3000` and use the form to send requests such as:
 - Fireblocks: `GET /v1/vault/accounts_paged`
 - Allium: `GET /v1/address/0x1234567890123456789012345678901234567890`
 - CoinAPI: `GET /v1/exchangerate/BTC/USD`
-- BitGo: `GET /v2/wallets`
+- BitGo: `GET /api/v2/hteth/wallet`
 
 ## How it works
 

@@ -60,9 +60,9 @@ const providerInfo: Record<
   },
   bitgo: {
     label: 'BitGo',
-    defaultPath: '/v2/wallets',
-    notes: 'Bearer token from BITGO_API_KEY',
-    authSummary: 'Bearer BITGO_API_KEY',
+    defaultPath: '/api/v2/hteth/wallet',
+    notes: 'Bearer token from BITGO_ACCESS_TOKEN',
+    authSummary: 'Bearer BITGO_ACCESS_TOKEN',
   },
 };
 
@@ -408,7 +408,7 @@ export default function Home() {
               <div className='rounded-2xl border border-white/10 bg-white/5 px-4 py-3'>
                 Keep provider secrets in server-side env vars (for example
                 FIREBLOCKS_SECRET_KEY, ALLIUM_API_KEY, COINAPI_API_KEY,
-                BITGO_API_KEY).
+                BITGO_ACCESS_TOKEN).
               </div>
             </div>
           </div>

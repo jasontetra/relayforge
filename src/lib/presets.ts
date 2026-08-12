@@ -188,21 +188,90 @@ export const coinapiPresetsGrouped: PresetGroup[] = [
   },
 ];
 
+// Defaults resolve against the unity-dependencies BitGo mock so presets run
+// unedited in mockoon mode. Real mode needs your own coin, wallet, and
+// enterprise ids.
+const MOCK_COIN = 'hteth';
+const MOCK_WALLET_ID = '59cd72485007a239fae4aa1ffdd5ab52';
+const MOCK_TRANSFER_ID = 'aaaa0001000040008fb0000000000001';
+
+// Resolved server-side per target: BITGO_ENTERPRISE_ID for real, the mock's
+// enterprise for mockoon.
+const ENTERPRISE_ID = '{enterpriseId}';
+
 export const bitgoPresetsGrouped: PresetGroup[] = [
   {
     category: 'Wallets',
     presets: [
       {
-        label: 'Get Wallet Balance',
+        label: 'List Wallets (Coin)',
         provider: 'bitgo',
         method: 'GET',
-        path: '/v2/btc/wallet/{walletId}',
+        path: `/api/v2/${MOCK_COIN}/wallet`,
+        query: '{\n  "limit": 50\n}',
       },
       {
-        label: 'List Wallets',
+        // BitGo accepts ?enterprise= here but does not filter on it, so the
+        // preset omits it rather than implying a filter that does nothing.
+        label: 'List All Wallets',
         provider: 'bitgo',
         method: 'GET',
-        path: '/v2/wallets',
+        path: '/api/v2/wallets',
+      },
+      {
+        label: 'Get Wallet',
+        provider: 'bitgo',
+        method: 'GET',
+        path: `/api/v2/${MOCK_COIN}/wallet/${MOCK_WALLET_ID}`,
+      },
+      {
+        label: 'Wallet Addresses',
+        provider: 'bitgo',
+        method: 'GET',
+        path: `/api/v2/${MOCK_COIN}/wallet/${MOCK_WALLET_ID}/addresses`,
+      },
+    ],
+  },
+  {
+    category: 'Transfers',
+    presets: [
+      {
+        label: 'List Wallet Transfers',
+        provider: 'bitgo',
+        method: 'GET',
+        path: `/api/v2/${MOCK_COIN}/wallet/${MOCK_WALLET_ID}/transfer`,
+        query: '{\n  "limit": 50\n}',
+      },
+      {
+        label: 'Get Transfer',
+        provider: 'bitgo',
+        method: 'GET',
+        path: `/api/v2/${MOCK_COIN}/wallet/${MOCK_WALLET_ID}/transfer/${MOCK_TRANSFER_ID}`,
+      },
+      {
+        label: 'List Enterprise Transfers',
+        provider: 'bitgo',
+        method: 'GET',
+        path: `/api/v2/enterprise/${ENTERPRISE_ID}/transfer`,
+        query: '{\n  "limit": 50\n}',
+      },
+      {
+        label: 'Send Coins',
+        provider: 'bitgo',
+        method: 'POST',
+        path: `/api/v2/${MOCK_COIN}/wallet/${MOCK_WALLET_ID}/sendcoins`,
+        body: '{\n  "address": "0x0000000000000000000000000000000000000002",\n  "amount": "10000",\n  "walletPassphrase": "test-passphrase"\n}',
+      },
+    ],
+  },
+  {
+    category: 'Reference',
+    presets: [
+      {
+        label: 'Client Constants',
+        provider: 'bitgo',
+        method: 'GET',
+        path: '/api/v1/client/constants',
       },
     ],
   },
