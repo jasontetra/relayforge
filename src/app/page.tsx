@@ -36,41 +36,58 @@ const providerInfo: Record<
   ProviderId,
   {
     label: string;
+    defaultMethod: RequestMethod;
     defaultPath: string;
+    defaultBody?: string;
     notes: string;
     authSummary: string;
   }
 > = {
   fireblocks: {
     label: 'Fireblocks',
+    defaultMethod: 'GET',
     defaultPath: '/v1/vault/accounts_paged',
     notes: 'JWT + X-API-Key on real mode',
     authSummary: 'JWT + X-API-Key',
   },
   allium: {
     label: 'Allium',
+    defaultMethod: 'GET',
     defaultPath: '/v1/address/{address}',
     notes: 'Bearer token from ALLIUM_API_KEY',
     authSummary: 'Bearer ALLIUM_API_KEY',
   },
   coinapi: {
     label: 'CoinAPI',
+    defaultMethod: 'GET',
     defaultPath: '/v1/exchangerate/BTC/USD',
     notes: 'X-CoinAPI-Key header from COINAPI_API_KEY',
     authSummary: 'X-CoinAPI-Key',
   },
   bitgo: {
     label: 'BitGo',
+    defaultMethod: 'GET',
     defaultPath: '/api/v2/hteth/wallet',
     notes: 'Bearer token from BITGO_ACCESS_TOKEN',
     authSummary: 'Bearer BITGO_ACCESS_TOKEN',
   },
   atb: {
     label: 'ATB',
+    defaultMethod: 'GET',
     defaultPath: '/fdx/5.3/accounts',
     notes:
       'Real mode uses bearer + x-atb-api-key + client_assertion. Live ATB is IP-allowlisted; laptop calls often fail. Mockoon skips auth. {accountId} is ATB_ACCOUNT_ID on real and syn-acct-0001 on mock. Values will differ; compare envelope/field paths.',
     authSummary: 'Bearer + x-atb-api-key + JWT',
+  },
+  allnodes: {
+    label: 'Allnodes',
+    defaultMethod: 'POST',
+    defaultPath: '/eth',
+    defaultBody:
+      '{\n  "jsonrpc": "2.0",\n  "id": 1,\n  "method": "eth_chainId",\n  "params": []\n}',
+    notes:
+      'Path selects the chain (/btc, /eth, /base, /tempo, /basesepolia, /ethsepolia). The JSON-RPC body is posted to the selected chain node URL. Real mode defaults to Allnodes PublicNode; override ALLNODES_*_RPC_URL for dedicated hosts. user:pass in a URL becomes HTTP Basic. Placeholders {txHash}, {blockHash}, {btcBlockHash}, and {btcTxid} are filled from the live node. BTC wallet RPCs use /btc/wallet/{walletName} from ALLNODES_BTC_WALLET. Mockoon is not wired yet.',
+    authSummary: 'URL Basic (optional)',
   },
 };
 
@@ -121,11 +138,12 @@ export default function Home() {
   }, [response]);
 
   function applyProvider(nextProvider: ProviderId) {
+    const info = providerInfo[nextProvider];
     setProvider(nextProvider);
-    setMethod('GET');
-    setPath(providerInfo[nextProvider].defaultPath);
+    setMethod(info.defaultMethod);
+    setPath(info.defaultPath);
     setQueryText('');
-    setBodyText('');
+    setBodyText(info.defaultBody ?? '');
     setClientError(null);
     setSelectedPreset(null);
   }
@@ -420,7 +438,7 @@ export default function Home() {
               <div className='rounded-2xl border border-white/10 bg-white/5 px-4 py-3'>
                 Keep provider secrets in server-side env vars (for example
                 FIREBLOCKS_SECRET_KEY, ALLIUM_API_KEY, COINAPI_API_KEY,
-                BITGO_ACCESS_TOKEN, ATB_PRIVATE_KEY).
+                BITGO_ACCESS_TOKEN, ATB_PRIVATE_KEY, ALLNODES_*_RPC_URL).
               </div>
             </div>
           </div>

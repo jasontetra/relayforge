@@ -26,13 +26,70 @@ const ATB_ASSERTION_AUDIENCE = 'https://api.atb.com/';
 const ATB_ASSERTION_LIFETIME_MS = 5 * 60 * 1000;
 const ATB_AUTH_RENEW_BEFORE_MS = 60 * 1000;
 
+export const ALLNODES_CHAINS = [
+  'btc',
+  'eth',
+  'base',
+  'tempo',
+  'basesepolia',
+  'ethsepolia',
+] as const;
+export type AllnodesChain = (typeof ALLNODES_CHAINS)[number];
+
+const ALLNODES_CHAIN_ALIASES: Record<string, AllnodesChain> = {
+  bitcoin: 'btc',
+  ethereum: 'eth',
+  'base-sepolia': 'basesepolia',
+  'eth-sepolia': 'ethsepolia',
+};
+
+const ALLNODES_TX_PLACEHOLDER = '{txHash}';
+const ALLNODES_BLOCK_PLACEHOLDER = '{blockHash}';
+const ALLNODES_BTC_BLOCK_PLACEHOLDER = '{btcBlockHash}';
+const ALLNODES_BTC_TX_PLACEHOLDER = '{btcTxid}';
+const ALLNODES_BTC_WALLET_PLACEHOLDER = '{walletName}';
+const ALLNODES_BTC_WALLET_METHODS = new Set([
+  'getbalance',
+  'getbalances',
+  'getwalletinfo',
+  'listunspent',
+]);
+const SYNTHETIC_ALLNODES_TX_HASH =
+  '0x1111111111111111111111111111111111111111111111111111111111111111';
+const SYNTHETIC_ALLNODES_BLOCK_HASH =
+  '0x2222222222222222222222222222222222222222222222222222222222222222';
+const SYNTHETIC_ALLNODES_BTC_BLOCK_HASH =
+  '2222222222222222222222222222222222222222222222222222222222222222';
+const SYNTHETIC_ALLNODES_BTC_TXID =
+  '3333333333333333333333333333333333333333333333333333333333333333';
+const DEFAULT_ALLNODES_MOCK_BTC_WALLET = 'syn-wallet-0001';
+
+const ALLNODES_RPC_URL_ENV: Record<AllnodesChain, string> = {
+  btc: 'ALLNODES_BTC_RPC_URL',
+  eth: 'ALLNODES_ETH_RPC_URL',
+  base: 'ALLNODES_BASE_RPC_URL',
+  tempo: 'ALLNODES_TEMPO_RPC_URL',
+  basesepolia: 'ALLNODES_BASESEPOLIA_RPC_URL',
+  ethsepolia: 'ALLNODES_ETHSEPOLIA_RPC_URL',
+};
+
+const DEFAULT_ALLNODES_RPC_URL: Record<AllnodesChain, string> = {
+  btc: 'https://bitcoin-rpc.publicnode.com',
+  eth: 'https://ethereum-rpc.publicnode.com',
+  base: 'https://base-rpc.publicnode.com',
+  tempo: 'https://tempo-rpc.publicnode.com',
+  basesepolia: 'https://base-sepolia-rpc.publicnode.com',
+  ethsepolia: 'https://ethereum-sepolia-rpc.publicnode.com',
+};
+
 export type RequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type ProviderId =
   | 'fireblocks'
   | 'allium'
   | 'coinapi'
   | 'bitgo'
-  | 'atb';
+  | 'atb'
+  | 'allnodes';
 export type ServerTarget = 'real' | 'mockoon' | 'both';
 export type ForwardTarget = Exclude<ServerTarget, 'both'>;
 
@@ -53,6 +110,7 @@ const MOCKOON_BASE_URL_ENV: Record<ProviderId, string> = {
   coinapi: 'COINAPI_MOCKOON_BASE_URL',
   bitgo: 'BITGO_MOCKOON_BASE_URL',
   atb: 'ATB_MOCKOON_BASE_URL',
+  allnodes: 'ALLNODES_MOCKOON_BASE_URL',
 };
 
 function getEnv(name: string): string {
@@ -166,6 +224,276 @@ function resolveAtbAccount(
           ]),
         )
       : query,
+  };
+}
+
+function isAllnodesChain(value: string): value is AllnodesChain {
+  return (ALLNODES_CHAINS as readonly string[]).includes(value);
+}
+
+function parseAllnodesPath(
+  path: string,
+  query: ApiRequestInput['query'],
+): { chain: AllnodesChain; rpcSuffix: string } {
+  const segments = normalizePath(path)
+    .slice(1)
+    .split('/')
+    .filter(Boolean);
+  const fromQuery =
+    typeof query?.chain === 'string' ? query.chain.trim().toLowerCase() : '';
+  const raw = (segments[0] || fromQuery).toLowerCase();
+  const chain = ALLNODES_CHAIN_ALIASES[raw] ?? raw;
+
+  if (!isAllnodesChain(chain)) {
+    throw new Error(
+      'Allnodes path must be one of /btc, /eth, /base, /tempo, /basesepolia, /ethsepolia.',
+    );
+  }
+
+  const rpcSuffix = segments.length > 1 ? `/${segments.slice(1).join('/')}` : '';
+  return { chain, rpcSuffix };
+}
+
+function getAllnodesRpcUrl(chain: AllnodesChain): string {
+  return (
+    process.env[ALLNODES_RPC_URL_ENV[chain]]?.trim() ||
+    DEFAULT_ALLNODES_RPC_URL[chain]
+  );
+}
+
+function stripUrlUserInfo(url: URL): { href: string; authorization?: string } {
+  if (!url.username && !url.password) {
+    return { href: url.href };
+  }
+
+  const user = decodeURIComponent(url.username);
+  const pass = decodeURIComponent(url.password);
+  const authorization = `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
+  url.username = '';
+  url.password = '';
+  return { href: url.href, authorization };
+}
+
+function applyPlaceholders(
+  value: unknown,
+  vars: Record<string, string>,
+): unknown {
+  if (typeof value === 'string') {
+    let out = value;
+    for (const [key, replacement] of Object.entries(vars)) {
+      out = out.replaceAll(`{${key}}`, replacement);
+    }
+    return out;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => applyPlaceholders(item, vars));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nested]) => [
+        key,
+        applyPlaceholders(nested, vars),
+      ]),
+    );
+  }
+
+  return value;
+}
+
+function placeholderNeeded(haystack: string, token: string): boolean {
+  return haystack.includes(token);
+}
+
+async function allnodesJsonRpc(
+  href: string,
+  authorization: string | undefined,
+  methodName: string,
+  params: unknown[],
+  jsonrpc: '1.0' | '2.0',
+): Promise<unknown> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (authorization) {
+    headers.Authorization = authorization;
+  }
+
+  const response = await fetch(href, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ jsonrpc, id: 1, method: methodName, params }),
+    cache: 'no-store',
+  });
+  const text = await response.text();
+  let parsed: { result?: unknown; error?: { message?: string } };
+  try {
+    parsed = JSON.parse(text) as {
+      result?: unknown;
+      error?: { message?: string };
+    };
+  } catch {
+    throw new Error(
+      `Allnodes ${methodName} returned non-JSON (${response.status}).`,
+    );
+  }
+  if (parsed.error) {
+    throw new Error(
+      `Allnodes ${methodName} failed: ${parsed.error.message || 'unknown error'}`,
+    );
+  }
+  return parsed.result;
+}
+
+function jsonRpcMethodName(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return undefined;
+  }
+  const method = (body as { method?: unknown }).method;
+  return typeof method === 'string' ? method : undefined;
+}
+
+function firstTxHash(transactions: unknown[] | undefined): string | undefined {
+  const tx = transactions?.[0];
+  if (typeof tx === 'string') {
+    return tx;
+  }
+  if (tx && typeof tx === 'object' && 'hash' in tx) {
+    const hash = (tx as { hash?: unknown }).hash;
+    if (typeof hash === 'string') {
+      return hash;
+    }
+  }
+  return undefined;
+}
+
+function joinRpcPath(href: string, rpcSuffix: string): string {
+  if (!rpcSuffix) {
+    return href;
+  }
+  const url = new URL(href);
+  const basePath = url.pathname.replace(/\/+$/, '');
+  url.pathname = `${basePath}${rpcSuffix.startsWith('/') ? rpcSuffix : `/${rpcSuffix}`}`;
+  return url.href;
+}
+
+async function resolveAllnodesLiveValues(
+  chain: AllnodesChain,
+  href: string,
+  authorization: string | undefined,
+  haystack: string,
+): Promise<Record<string, string>> {
+  const vars: Record<string, string> = {};
+
+  if (chain === 'btc') {
+    if (placeholderNeeded(haystack, ALLNODES_BTC_WALLET_PLACEHOLDER)) {
+      const walletName = process.env.ALLNODES_BTC_WALLET?.trim();
+      if (!walletName) {
+        throw new Error(
+          'Set ALLNODES_BTC_WALLET for BTC wallet RPCs (path /btc/wallet/{walletName}).',
+        );
+      }
+      vars.walletName = walletName;
+    }
+
+    const needBlock = placeholderNeeded(haystack, ALLNODES_BTC_BLOCK_PLACEHOLDER);
+    const needTx = placeholderNeeded(haystack, ALLNODES_BTC_TX_PLACEHOLDER);
+    if (needBlock || needTx) {
+      const best = await allnodesJsonRpc(
+        href,
+        authorization,
+        'getbestblockhash',
+        [],
+        '1.0',
+      );
+      if (typeof best !== 'string') {
+        throw new Error('Allnodes getbestblockhash did not return a hash.');
+      }
+      vars.btcBlockHash = best;
+      if (needTx) {
+        const block = (await allnodesJsonRpc(
+          href,
+          authorization,
+          'getblock',
+          [best, 1],
+          '1.0',
+        )) as { tx?: unknown };
+        const txid = Array.isArray(block?.tx) ? block.tx[0] : undefined;
+        if (typeof txid !== 'string') {
+          throw new Error('Allnodes tip block has no txid to substitute.');
+        }
+        vars.btcTxid = txid;
+      }
+    }
+    return vars;
+  }
+
+  const needBlock = placeholderNeeded(haystack, ALLNODES_BLOCK_PLACEHOLDER);
+  const needTx = placeholderNeeded(haystack, ALLNODES_TX_PLACEHOLDER);
+  if (!needBlock && !needTx) {
+    return vars;
+  }
+
+  const heightHex = await allnodesJsonRpc(
+    href,
+    authorization,
+    'eth_blockNumber',
+    [],
+    '2.0',
+  );
+  if (typeof heightHex !== 'string') {
+    throw new Error('Allnodes eth_blockNumber did not return a block number.');
+  }
+  const height = Number.parseInt(heightHex, 16);
+  if (!Number.isFinite(height) || height < 0) {
+    throw new Error('Allnodes eth_blockNumber was not a valid height.');
+  }
+  for (let offset = 0; offset < 40; offset += 1) {
+    const block = (await allnodesJsonRpc(
+      href,
+      authorization,
+      'eth_getBlockByNumber',
+      [`0x${(height - offset).toString(16)}`, false],
+      '2.0',
+    )) as { hash?: string; transactions?: unknown[] } | null;
+    if (!block) {
+      continue;
+    }
+    if (needBlock && typeof block.hash === 'string') {
+      vars.blockHash = block.hash;
+    }
+    const txHash = firstTxHash(block.transactions);
+    if (needTx && txHash) {
+      vars.txHash = txHash;
+      if (!vars.blockHash && typeof block.hash === 'string') {
+        vars.blockHash = block.hash;
+      }
+      break;
+    }
+    if (needBlock && vars.blockHash && !needTx) {
+      break;
+    }
+  }
+
+  if (needBlock && !vars.blockHash) {
+    throw new Error('Could not resolve {blockHash} from recent Allnodes blocks.');
+  }
+  if (needTx && !vars.txHash) {
+    throw new Error('Could not resolve {txHash} from recent Allnodes blocks.');
+  }
+  return vars;
+}
+
+function syntheticAllnodesValues(): Record<string, string> {
+  return {
+    txHash: SYNTHETIC_ALLNODES_TX_HASH,
+    blockHash: SYNTHETIC_ALLNODES_BLOCK_HASH,
+    btcBlockHash: SYNTHETIC_ALLNODES_BTC_BLOCK_HASH,
+    btcTxid: SYNTHETIC_ALLNODES_BTC_TXID,
+    walletName:
+      process.env.ALLNODES_MOCK_BTC_WALLET?.trim() ||
+      DEFAULT_ALLNODES_MOCK_BTC_WALLET,
   };
 }
 
@@ -484,6 +812,10 @@ function getTargetBaseUrl(provider: ProviderId, target: ForwardTarget): string {
     return process.env.ATB_BASE_URL?.trim() || DEFAULT_ATB_BASE_URL;
   }
 
+  if (provider === 'allnodes') {
+    throw new Error('Allnodes RPC URL is selected per chain, not from a shared base.');
+  }
+
   return process.env.BITGO_BASE_URL?.trim() || DEFAULT_BITGO_BASE_URL;
 }
 
@@ -557,12 +889,62 @@ export async function callApi({
 }: ApiRequestInput) {
   const { path: normalizedPath, query: resolvedQuery } =
     resolveProviderPlaceholders(provider, path, query, target);
-  const baseUrl = getTargetBaseUrl(provider, target);
-  const url = new URL(normalizedPath, baseUrl);
+
+  let url: URL;
+  let basicAuth: string | undefined;
+  let resolvedBody = body;
+
+  if (provider === 'allnodes') {
+    if (body === undefined || body === null) {
+      throw new Error('Allnodes JSON-RPC body is required.');
+    }
+
+    let { chain, rpcSuffix } = parseAllnodesPath(normalizedPath, resolvedQuery);
+    const methodName = jsonRpcMethodName(body);
+    if (
+      chain === 'btc' &&
+      methodName &&
+      ALLNODES_BTC_WALLET_METHODS.has(methodName) &&
+      !rpcSuffix.includes('/wallet/')
+    ) {
+      rpcSuffix = `/wallet/{walletName}`;
+    }
+
+    const haystack = `${normalizedPath}\n${rpcSuffix}\n${JSON.stringify(body)}`;
+    const stripped = stripUrlUserInfo(new URL(getAllnodesRpcUrl(chain)));
+    const vars =
+      target === 'mockoon'
+        ? syntheticAllnodesValues()
+        : await resolveAllnodesLiveValues(
+            chain,
+            stripped.href,
+            stripped.authorization,
+            haystack,
+          );
+
+    rpcSuffix = String(applyPlaceholders(rpcSuffix, vars));
+    resolvedBody = applyPlaceholders(body, vars);
+
+    if (target === 'mockoon') {
+      url = new URL(
+        `/${chain}${rpcSuffix}`,
+        getTargetBaseUrl(provider, target),
+      );
+    } else {
+      url = new URL(joinRpcPath(stripped.href, rpcSuffix));
+      basicAuth = stripped.authorization;
+    }
+  } else {
+    url = new URL(normalizedPath, getTargetBaseUrl(provider, target));
+  }
 
   if (resolvedQuery) {
     for (const [key, value] of Object.entries(resolvedQuery)) {
       if (value === undefined || value === null || value === '') {
+        continue;
+      }
+
+      if (key === 'chain' && provider === 'allnodes') {
         continue;
       }
 
@@ -574,14 +956,18 @@ export async function callApi({
     }
   }
 
-  const bodyText = serializeBody(body);
+  const bodyText = serializeBody(resolvedBody);
   const headers = await buildHeaders({
     provider,
     target,
     pathWithQuery: `${normalizedPath}${url.search}`,
-    body,
+    body: resolvedBody,
     bodyText,
   });
+
+  if (basicAuth) {
+    headers.Authorization = basicAuth;
+  }
 
   const response = await fetch(url, {
     method,

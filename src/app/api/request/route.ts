@@ -9,6 +9,7 @@ const allowedProviders = new Set<ProviderId>([
   'coinapi',
   'bitgo',
   'atb',
+  'allnodes',
 ]);
 const allowedTargets = new Set<ServerTarget>(['real', 'mockoon', 'both']);
 
@@ -52,7 +53,8 @@ export async function POST(request: Request) {
   if (!allowedProviders.has(provider)) {
     return NextResponse.json(
       {
-        error: 'Provider must be one of fireblocks, allium, coinapi, bitgo, atb.',
+        error:
+          'Provider must be one of fireblocks, allium, coinapi, bitgo, atb, allnodes.',
       },
       { status: 400 },
     );

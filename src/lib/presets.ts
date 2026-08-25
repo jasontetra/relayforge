@@ -19,7 +19,8 @@ export type ProviderId =
   | 'allium'
   | 'coinapi'
   | 'bitgo'
-  | 'atb';
+  | 'atb'
+  | 'allnodes';
 
 export const fireblockPresetsGrouped: PresetGroup[] = [
   {
@@ -277,6 +278,63 @@ export const bitgoPresetsGrouped: PresetGroup[] = [
 
 const ATB_ACCOUNT_ID = '{accountId}';
 
+const ZERO_EVM_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+const ALLNODES_CHAIN_LABEL = {
+  btc: 'BTC',
+  eth: 'ETH',
+  base: 'BASE',
+  tempo: 'TEMPO',
+  basesepolia: 'BaseSepolia',
+  ethsepolia: 'ETHSepolia',
+} as const;
+
+type AllnodesPresetChain = keyof typeof ALLNODES_CHAIN_LABEL;
+
+function allnodesPreset(
+  chain: AllnodesPresetChain,
+  rpcMethod: string,
+  params: unknown[] = [],
+  jsonrpc: '1.0' | '2.0' = '2.0',
+  path = `/${chain}`,
+): Preset {
+  return {
+    label: `${ALLNODES_CHAIN_LABEL[chain]} ${rpcMethod}`,
+    provider: 'allnodes',
+    method: 'POST',
+    path,
+    body: JSON.stringify({ jsonrpc, id: 1, method: rpcMethod, params }, null, 2),
+  };
+}
+
+function evmChainPresets(chain: Exclude<AllnodesPresetChain, 'btc'>): Preset[] {
+  return [
+    allnodesPreset(chain, 'eth_chainId'),
+    allnodesPreset(chain, 'eth_blockNumber'),
+    allnodesPreset(chain, 'eth_syncing'),
+    allnodesPreset(chain, 'web3_clientVersion'),
+    allnodesPreset(chain, 'eth_getBlockByNumber', ['latest', false]),
+    allnodesPreset(chain, 'eth_getBlockByHash', ['{blockHash}', false]),
+    allnodesPreset(chain, 'eth_getBlockReceipts', ['latest']),
+    allnodesPreset(chain, 'eth_getBalance', [ZERO_EVM_ADDRESS, 'latest']),
+    allnodesPreset(chain, 'eth_getTransactionByHash', ['{txHash}']),
+    allnodesPreset(chain, 'eth_getTransactionReceipt', ['{txHash}']),
+    allnodesPreset(chain, 'eth_getLogs', [
+      { fromBlock: 'latest', toBlock: 'latest' },
+    ]),
+    allnodesPreset(chain, 'eth_call', [
+      { to: ZERO_EVM_ADDRESS, data: '0x' },
+      'latest',
+    ]),
+    allnodesPreset(chain, 'eth_getCode', [ZERO_EVM_ADDRESS, 'latest']),
+    allnodesPreset(chain, 'eth_getStorageAt', [
+      ZERO_EVM_ADDRESS,
+      '0x0',
+      'latest',
+    ]),
+  ];
+}
+
 export const atbPresetsGrouped: PresetGroup[] = [
   {
     category: 'Accounts',
@@ -311,6 +369,53 @@ export const atbPresetsGrouped: PresetGroup[] = [
   },
 ];
 
+export const allnodesPresetsGrouped: PresetGroup[] = [
+  {
+    category: 'BTC',
+    presets: [
+      allnodesPreset('btc', 'getblockchaininfo', [], '1.0'),
+      allnodesPreset('btc', 'getblockcount', [], '1.0'),
+      allnodesPreset('btc', 'getbestblockhash', [], '1.0'),
+      allnodesPreset('btc', 'getblockhash', [0], '1.0'),
+      allnodesPreset('btc', 'getblock', ['{btcBlockHash}', 1], '1.0'),
+      allnodesPreset('btc', 'getrawtransaction', ['{btcTxid}', true], '1.0'),
+      allnodesPreset(
+        'btc',
+        'getbalance',
+        [],
+        '1.0',
+        '/btc/wallet/{walletName}',
+      ),
+      allnodesPreset(
+        'btc',
+        'getbalances',
+        [],
+        '1.0',
+        '/btc/wallet/{walletName}',
+      ),
+      allnodesPreset(
+        'btc',
+        'getwalletinfo',
+        [],
+        '1.0',
+        '/btc/wallet/{walletName}',
+      ),
+      allnodesPreset(
+        'btc',
+        'listunspent',
+        [],
+        '1.0',
+        '/btc/wallet/{walletName}',
+      ),
+    ],
+  },
+  { category: 'ETH', presets: evmChainPresets('eth') },
+  { category: 'BASE', presets: evmChainPresets('base') },
+  { category: 'TEMPO', presets: evmChainPresets('tempo') },
+  { category: 'BaseSepolia', presets: evmChainPresets('basesepolia') },
+  { category: 'ETHSepolia', presets: evmChainPresets('ethsepolia') },
+];
+
 // Flatten grouped presets for backward compatibility
 export const allPresets: Preset[] = [
   ...fireblockPresetsGrouped.flatMap((g) => g.presets),
@@ -318,6 +423,7 @@ export const allPresets: Preset[] = [
   ...coinapiPresetsGrouped.flatMap((g) => g.presets),
   ...bitgoPresetsGrouped.flatMap((g) => g.presets),
   ...atbPresetsGrouped.flatMap((g) => g.presets),
+  ...allnodesPresetsGrouped.flatMap((g) => g.presets),
 ];
 
 // Grouped presets by provider
@@ -327,4 +433,5 @@ export const presetsGroupedByProvider: Record<ProviderId, PresetGroup[]> = {
   coinapi: coinapiPresetsGrouped,
   bitgo: bitgoPresetsGrouped,
   atb: atbPresetsGrouped,
+  allnodes: allnodesPresetsGrouped,
 };

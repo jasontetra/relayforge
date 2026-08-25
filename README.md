@@ -30,6 +30,13 @@ ATB_PASSWORD=your-atb-password
 ATB_CLIENT_ID=your-atb-client-id
 ATB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
 ATB_ACCOUNT_ID=your-atb-account-id
+
+ALLNODES_BTC_RPC_URL=https://bitcoin-rpc.publicnode.com
+ALLNODES_ETH_RPC_URL=https://ethereum-rpc.publicnode.com
+ALLNODES_BASE_RPC_URL=https://base-rpc.publicnode.com
+ALLNODES_TEMPO_RPC_URL=https://tempo-rpc.publicnode.com
+ALLNODES_BASESEPOLIA_RPC_URL=https://base-sepolia-rpc.publicnode.com
+ALLNODES_ETHSEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
 ```
 
 Notes:
@@ -40,6 +47,7 @@ Notes:
 - CoinAPI real mode uses `X-CoinAPI-Key` header.
 - BitGo real mode uses `Bearer BITGO_ACCESS_TOKEN` (`BITGO_API_KEY` still works).
 - ATB real mode posts to `/atbaccesstokens/v2`, then sends `Authorization`, `x-atb-api-key`, and `client_assertion` on FDX routes. Live ATB is IP-allowlisted; laptop calls often fail. `ATB_PRIVATE_KEY` accepts PKCS#1, PKCS#8, or an unencrypted OpenSSH RSA key.
+- Allnodes real mode posts JSON-RPC to the per-chain RPC URL. Defaults are Allnodes PublicNode. Dedicated URLs may include `user:pass` (sent as HTTP Basic).
 - `FIREBLOCKS_SECRET_KEY` and `ATB_PRIVATE_KEY` can use real newlines or escaped `\n` sequences.
 - Keep all secrets server-side only.
 
@@ -60,7 +68,7 @@ FIREBLOCKS_MOCKOON_BASE_URL=http://127.0.0.1:9001
 ALLIUM_MOCKOON_BASE_URL=http://127.0.0.1:9002
 COINAPI_MOCKOON_BASE_URL=http://127.0.0.1:9000
 BITGO_MOCKOON_BASE_URL=http://127.0.0.1:9003
-ATB_MOCKOON_BASE_URL=http://127.0.0.1:9004
+ALLNODES_MOCKOON_BASE_URL=http://127.0.0.1:9005
 ```
 
 ## BitGo
@@ -146,6 +154,55 @@ To exercise a non-default mock scenario such as `unattributed_eft_credit`,
 { "scenario": "unattributed_eft_credit" }
 ```
 
+## Allnodes
+
+Allnodes hosts per-chain JSON-RPC nodes. RelayForge posts the JSON-RPC body to
+the selected chain's node URL. The **path is the chain selector**, not a path on
+the node:
+
+| Path | Chain |
+| --- | --- |
+| `/btc` | Bitcoin |
+| `/eth` | Ethereum |
+| `/base` | Base |
+| `/tempo` | Tempo |
+| `/basesepolia` | Base Sepolia |
+| `/ethsepolia` | Ethereum Sepolia |
+
+| | RPC URL |
+| --- | --- |
+| PublicNode (default) | `https://<chain>-rpc.publicnode.com` (see `.env.example`) |
+| Dedicated host | set `ALLNODES_<CHAIN>_RPC_URL` |
+
+`user:pass` in a dedicated URL is sent as HTTP Basic and stripped from the
+request URL. PublicNode needs no auth. Wallet RPCs such as Bitcoin `getbalance`
+are blocked on PublicNode; they need a dedicated node and
+`ALLNODES_BTC_WALLET` (Bitcoin Core path `/wallet/<name>`).
+
+Presets use POST JSON-RPC for the in-scope chain, wallet, and transaction
+commands. Placeholders are filled before the request:
+
+| Placeholder | Real target | Mockoon |
+| --- | --- | --- |
+| `{blockHash}` / `{txHash}` | Recent block with a transaction | Synthetic hashes |
+| `{btcBlockHash}` / `{btcTxid}` | Tip block and its first txid | Synthetic hashes |
+| `{walletName}` | `ALLNODES_BTC_WALLET` | `ALLNODES_MOCK_BTC_WALLET` (`syn-wallet-0001`) |
+
+JSON-RPC errors still return HTTP 200 with an `error` object in the body.
+
+```bash
+# Example: Ethereum chain id via the local relay
+curl -sS http://localhost:3000/api/request \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "provider": "allnodes",
+    "target": "real",
+    "method": "POST",
+    "path": "/eth",
+    "body": { "jsonrpc": "2.0", "id": 1, "method": "eth_chainId", "params": [] }
+  }'
+```
+
 ## Run
 
 ```bash
@@ -160,6 +217,7 @@ Open `http://localhost:3000` and use the form to send requests such as:
 - CoinAPI: `GET /v1/exchangerate/BTC/USD`
 - BitGo: `GET /api/v2/hteth/wallet`
 - ATB: `GET /fdx/5.3/accounts`
+- Allnodes: `POST /eth` with `{ "jsonrpc": "2.0", "id": 1, "method": "eth_chainId", "params": [] }`
 
 ## How it works
 
