@@ -16,11 +16,12 @@ type ApiResponse = {
   data?: unknown;
 };
 
-type ServerTarget = 'real' | 'mockoon';
+type ServerTarget = 'real' | 'mockoon' | 'both';
 
 const TARGET_OPTIONS: Array<{ value: ServerTarget; label: string }> = [
   { value: 'real', label: 'Real Server' },
   { value: 'mockoon', label: 'Mockoon' },
+  { value: 'both', label: 'Both (compare)' },
 ];
 
 const METHOD_OPTIONS: RequestMethod[] = [
@@ -63,6 +64,13 @@ const providerInfo: Record<
     defaultPath: '/api/v2/hteth/wallet',
     notes: 'Bearer token from BITGO_ACCESS_TOKEN',
     authSummary: 'Bearer BITGO_ACCESS_TOKEN',
+  },
+  atb: {
+    label: 'ATB',
+    defaultPath: '/fdx/5.3/accounts',
+    notes:
+      'Real mode uses bearer + x-atb-api-key + client_assertion. Live ATB is IP-allowlisted; laptop calls often fail. Mockoon skips auth. {accountId} is ATB_ACCOUNT_ID on real and syn-acct-0001 on mock. Values will differ; compare envelope/field paths.',
+    authSummary: 'Bearer + x-atb-api-key + JWT',
   },
 };
 
@@ -197,7 +205,11 @@ export default function Home() {
                   Target
                 </p>
                 <p className='mt-2 font-mono text-xs text-stone-100'>
-                  {target === 'real' ? 'Real Server' : 'Mockoon'}
+                  {target === 'real'
+                    ? 'Real Server'
+                    : target === 'mockoon'
+                      ? 'Mockoon'
+                      : 'Both (compare)'}
                 </p>
               </div>
               <div>
@@ -408,7 +420,7 @@ export default function Home() {
               <div className='rounded-2xl border border-white/10 bg-white/5 px-4 py-3'>
                 Keep provider secrets in server-side env vars (for example
                 FIREBLOCKS_SECRET_KEY, ALLIUM_API_KEY, COINAPI_API_KEY,
-                BITGO_ACCESS_TOKEN).
+                BITGO_ACCESS_TOKEN, ATB_PRIVATE_KEY).
               </div>
             </div>
           </div>

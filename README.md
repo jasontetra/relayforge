@@ -21,6 +21,15 @@ COINAPI_API_KEY=your-coinapi-api-key
 BITGO_BASE_URL=https://app.bitgo.com
 BITGO_ACCESS_TOKEN=your-bitgo-access-token
 BITGO_ENTERPRISE_ID=your-bitgo-enterprise-id
+
+ATB_BASE_URL=https://preprod.api.atb.com
+ATB_AUTH_URL=https://preprod.api.atb.com
+ATB_API_KEY=your-atb-api-key
+ATB_USERNAME=your-atb-username
+ATB_PASSWORD=your-atb-password
+ATB_CLIENT_ID=your-atb-client-id
+ATB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
+ATB_ACCOUNT_ID=your-atb-account-id
 ```
 
 Notes:
@@ -30,7 +39,8 @@ Notes:
 - Allium real mode uses `X-API-KEY` header.
 - CoinAPI real mode uses `X-CoinAPI-Key` header.
 - BitGo real mode uses `Bearer BITGO_ACCESS_TOKEN` (`BITGO_API_KEY` still works).
-- `FIREBLOCKS_SECRET_KEY` can use real newlines or escaped `\n` sequences.
+- ATB real mode posts to `/atbaccesstokens/v2`, then sends `Authorization`, `x-atb-api-key`, and `client_assertion` on FDX routes. Live ATB is IP-allowlisted; laptop calls often fail. `ATB_PRIVATE_KEY` accepts PKCS#1, PKCS#8, or an unencrypted OpenSSH RSA key.
+- `FIREBLOCKS_SECRET_KEY` and `ATB_PRIVATE_KEY` can use real newlines or escaped `\n` sequences.
 - Keep all secrets server-side only.
 
 ### Mock targets
@@ -50,6 +60,7 @@ FIREBLOCKS_MOCKOON_BASE_URL=http://127.0.0.1:9001
 ALLIUM_MOCKOON_BASE_URL=http://127.0.0.1:9002
 COINAPI_MOCKOON_BASE_URL=http://127.0.0.1:9000
 BITGO_MOCKOON_BASE_URL=http://127.0.0.1:9003
+ATB_MOCKOON_BASE_URL=http://127.0.0.1:9004
 ```
 
 ## BitGo
@@ -96,6 +107,45 @@ To exercise a non-default mock scenario such as `rate_limited`, `unauthorized`,
 { "scenario": "rate_limited" }
 ```
 
+## ATB
+
+ATB serves the same `/fdx/5.3/...` paths in both modes, so a preset works against
+the real API and the mock without edits.
+
+| | Base URL |
+| --- | --- |
+| Preprod | `https://preprod.api.atb.com` |
+| Production | `https://api.atb.com` |
+| Mock | `http://127.0.0.1:9004` |
+
+Set `ATB_BASE_URL` to the host only. Paths keep their `/fdx` prefix, since an
+absolute path replaces any path already on the base URL. Token issuance uses
+`ATB_AUTH_URL` (`POST /atbaccesstokens/v2`); the unity-dependencies mock does
+not implement that route.
+
+Start the mock from the `unity-dependencies` checkout:
+
+```bash
+npx @mockoon/cli start --data mocks/atb/v1/mockoon.json --port 9004
+```
+
+Account-scoped presets use a `{accountId}` placeholder that the server
+substitutes per target: `ATB_ACCOUNT_ID` on the real target, and
+`ATB_MOCK_ACCOUNT_ID` on mockoon (default `syn-acct-0001`).
+
+Use target **Both (compare)** to fire mockoon and real in parallel. The response
+includes each payload plus a field-path diff (`onlyInMockoon` / `onlyInReal`).
+`_meta` on mock fixtures is ignored in that diff. Values will not match: the
+mock is synthetic. Shape overlap is the useful check. Real mode may fail from
+a developer laptop because ATB allowlists Tetra egress IPs.
+
+To exercise a non-default mock scenario such as `unattributed_eft_credit`,
+`empty_transaction_id`, or `rate_limited`, add it to the Query JSON:
+
+```json
+{ "scenario": "unattributed_eft_credit" }
+```
+
 ## Run
 
 ```bash
@@ -109,6 +159,7 @@ Open `http://localhost:3000` and use the form to send requests such as:
 - Allium: `GET /v1/address/0x1234567890123456789012345678901234567890`
 - CoinAPI: `GET /v1/exchangerate/BTC/USD`
 - BitGo: `GET /api/v2/hteth/wallet`
+- ATB: `GET /fdx/5.3/accounts`
 
 ## How it works
 
@@ -116,6 +167,7 @@ Open `http://localhost:3000` and use the form to send requests such as:
 - In real mode, the server applies provider-specific auth behavior.
 - Fireblocks JWT claims are `uri`, `nonce`, `iat`, `exp`, `sub`, and `bodyHash`.
 - In mockoon mode, the server forwards the same request path/query/body without provider auth headers.
+- Target **Both (compare)** calls mockoon and real in parallel and returns a field-path diff.
 
 ## Validation
 

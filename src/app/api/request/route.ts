@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 
-import { callApi, ProviderId, RequestMethod, ServerTarget } from '@/lib/api-client';
+import { callApi, callBothApis, ProviderId, RequestMethod, ServerTarget } from '@/lib/api-client';
 
 const allowedMethods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
-const allowedProviders = new Set<ProviderId>(['fireblocks', 'allium', 'coinapi', 'bitgo']);
-const allowedTargets = new Set<ServerTarget>(['real', 'mockoon']);
+const allowedProviders = new Set<ProviderId>([
+  'fireblocks',
+  'allium',
+  'coinapi',
+  'bitgo',
+  'atb',
+]);
+const allowedTargets = new Set<ServerTarget>(['real', 'mockoon', 'both']);
 
 type RequestPayload = {
   provider?: ProviderId;
@@ -46,7 +52,7 @@ export async function POST(request: Request) {
   if (!allowedProviders.has(provider)) {
     return NextResponse.json(
       {
-        error: 'Provider must be one of fireblocks, allium, coinapi, bitgo.',
+        error: 'Provider must be one of fireblocks, allium, coinapi, bitgo, atb.',
       },
       { status: 400 },
     );
@@ -54,20 +60,29 @@ export async function POST(request: Request) {
 
   if (!allowedTargets.has(target)) {
     return NextResponse.json(
-      { error: 'Target must be one of real or mockoon.' },
+      { error: 'Target must be one of real, mockoon, or both.' },
       { status: 400 },
     );
   }
 
   try {
-    const response = await callApi({
-      provider,
-      method: method as RequestMethod,
-      path,
-      query: payload.query,
-      body: payload.body,
-      target,
-    });
+    const response =
+      target === 'both'
+        ? await callBothApis({
+            provider,
+            method: method as RequestMethod,
+            path,
+            query: payload.query,
+            body: payload.body,
+          })
+        : await callApi({
+            provider,
+            method: method as RequestMethod,
+            path,
+            query: payload.query,
+            body: payload.body,
+            target,
+          });
 
     return NextResponse.json(response, {
       status: response.ok ? 200 : response.status,

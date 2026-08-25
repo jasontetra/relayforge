@@ -14,7 +14,12 @@ export type PresetGroup = {
   presets: Preset[];
 };
 
-export type ProviderId = 'fireblocks' | 'allium' | 'coinapi' | 'bitgo';
+export type ProviderId =
+  | 'fireblocks'
+  | 'allium'
+  | 'coinapi'
+  | 'bitgo'
+  | 'atb';
 
 export const fireblockPresetsGrouped: PresetGroup[] = [
   {
@@ -255,13 +260,6 @@ export const bitgoPresetsGrouped: PresetGroup[] = [
         path: `/api/v2/enterprise/${ENTERPRISE_ID}/transfer`,
         query: '{\n  "limit": 50\n}',
       },
-      {
-        label: 'Send Coins',
-        provider: 'bitgo',
-        method: 'POST',
-        path: `/api/v2/${MOCK_COIN}/wallet/${MOCK_WALLET_ID}/sendcoins`,
-        body: '{\n  "address": "0x0000000000000000000000000000000000000002",\n  "amount": "10000",\n  "walletPassphrase": "test-passphrase"\n}',
-      },
     ],
   },
   {
@@ -277,12 +275,49 @@ export const bitgoPresetsGrouped: PresetGroup[] = [
   },
 ];
 
+const ATB_ACCOUNT_ID = '{accountId}';
+
+export const atbPresetsGrouped: PresetGroup[] = [
+  {
+    category: 'Accounts',
+    presets: [
+      {
+        label: 'List Accounts',
+        provider: 'atb',
+        method: 'GET',
+        path: '/fdx/5.3/accounts',
+        query: '{\n  "limit": 100,\n  "resultType": "details"\n}',
+      },
+    ],
+  },
+  {
+    category: 'Transactions',
+    presets: [
+      {
+        label: 'Account Transactions',
+        provider: 'atb',
+        method: 'GET',
+        path: `/fdx/5.3/accounts/${ATB_ACCOUNT_ID}/transactions`,
+        query: '{\n  "limit": 100\n}',
+      },
+      {
+        label: 'Account Transactions (page 2)',
+        provider: 'atb',
+        method: 'GET',
+        path: `/fdx/5.3/accounts/${ATB_ACCOUNT_ID}/transactions`,
+        query: '{\n  "limit": 100,\n  "offset": "100"\n}',
+      },
+    ],
+  },
+];
+
 // Flatten grouped presets for backward compatibility
 export const allPresets: Preset[] = [
   ...fireblockPresetsGrouped.flatMap((g) => g.presets),
   ...alliumPresetsGrouped.flatMap((g) => g.presets),
   ...coinapiPresetsGrouped.flatMap((g) => g.presets),
   ...bitgoPresetsGrouped.flatMap((g) => g.presets),
+  ...atbPresetsGrouped.flatMap((g) => g.presets),
 ];
 
 // Grouped presets by provider
@@ -291,4 +326,5 @@ export const presetsGroupedByProvider: Record<ProviderId, PresetGroup[]> = {
   allium: alliumPresetsGrouped,
   coinapi: coinapiPresetsGrouped,
   bitgo: bitgoPresetsGrouped,
+  atb: atbPresetsGrouped,
 };
