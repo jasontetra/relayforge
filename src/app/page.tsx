@@ -86,7 +86,7 @@ const providerInfo: Record<
     defaultBody:
       '{\n  "jsonrpc": "2.0",\n  "id": 1,\n  "method": "eth_chainId",\n  "params": []\n}',
     notes:
-      'Path selects the chain (/btc, /eth, /base, /tempo, /basesepolia, /ethsepolia). The JSON-RPC body is posted to the selected chain node URL. Real mode defaults to Allnodes PublicNode; override ALLNODES_*_RPC_URL for dedicated hosts. user:pass in a URL becomes HTTP Basic. Placeholders {txHash}, {blockHash}, {btcBlockHash}, and {btcTxid} are filled from the live node. BTC wallet RPCs use /btc/wallet/{walletName} from ALLNODES_BTC_WALLET. Mockoon is not wired yet.',
+      'Path selects the chain (/btc, /eth, /eth-archive, /base, /base-archive, /tempo, /basesepolia, /ethsepolia). The JSON-RPC body is posted to that node. Mockoon is ALLNODES_MOCKOON_BASE_URL: host Mockoon http://127.0.0.1:9005, or Docker proxy http://127.0.0.1:8085/_mock/ns/<namespace> (chain is joined from the path). Query { "scenario": "stale" } selects a catalog scenario on host Mockoon. Real mode defaults to PublicNode; override ALLNODES_*_RPC_URL for dedicated hosts. user:pass in a URL becomes HTTP Basic. Placeholders {txHash}, {blockHash}, {btcBlockHash}, and {btcTxid} are filled from the live node; mockoon uses synthetic ids. BTC wallet RPCs use /btc/wallet/{walletName} (ALLNODES_BTC_WALLET on real, syn-wallet-0001 on mock).',
     authSummary: 'URL Basic (optional)',
   },
 };

@@ -54,22 +54,39 @@ Notes:
 ### Mock targets
 
 Each provider mock in `unity-dependencies` listens on its own port, so a single
-`MOCKOON_BASE_URL` cannot reach all of them. Set a per-provider override to point
-mockoon mode at the right port; the provider-specific value wins, then
-`MOCKOON_BASE_URL`, then the default.
+`MOCKOON_BASE_URL` cannot reach all of them. Set a per-provider override; the
+provider-specific value wins, then `MOCKOON_BASE_URL`, then the default.
 
-Point these at Mockoon directly, not at `mock-proxy` on `8080`. The proxy serves
-one provider per process and expects namespaced paths like
-`/_mock/ns/<namespace>/<provider-path>`, so sending a bare provider path there
-returns 404.
+Mockoon mode joins the request path onto the base URL, so both host Mockoon and
+Docker `mock-proxy` work. Use a t-ledger consumer namespace (`local`, etc.) on
+the proxy — do not bake a RelayForge-specific path into unity-dependencies.
+
+Host Mockoon (`npx @mockoon/cli` or `make mock-*-up`):
 
 ```bash
 FIREBLOCKS_MOCKOON_BASE_URL=http://127.0.0.1:9001
 ALLIUM_MOCKOON_BASE_URL=http://127.0.0.1:9002
 COINAPI_MOCKOON_BASE_URL=http://127.0.0.1:9000
 BITGO_MOCKOON_BASE_URL=http://127.0.0.1:9003
+ATB_MOCKOON_BASE_URL=http://127.0.0.1:9004
 ALLNODES_MOCKOON_BASE_URL=http://127.0.0.1:9005
 ```
+
+Docker Compose publishes the proxies (`:8080`–`:8085`), not the Mockoon ports.
+Namespace only — RelayForge paths already include `/v1`, `/api/v2`, `/fdx`,
+and Allnodes chain (`/eth`, `/btc`, …):
+
+```bash
+FIREBLOCKS_MOCKOON_BASE_URL=http://127.0.0.1:8081/_mock/ns/local
+ALLIUM_MOCKOON_BASE_URL=http://127.0.0.1:8082/_mock/ns/local
+COINAPI_MOCKOON_BASE_URL=http://127.0.0.1:8080/_mock/ns/local
+BITGO_MOCKOON_BASE_URL=http://127.0.0.1:8083/_mock/ns/local
+ATB_MOCKOON_BASE_URL=http://127.0.0.1:8084/_mock/ns/local
+ALLNODES_MOCKOON_BASE_URL=http://127.0.0.1:8085/_mock/ns/local
+```
+
+Query `{ "scenario": "stale" }` selects a catalog scenario against host Mockoon.
+Through the proxy, assign the namespace scenario via the admin API instead.
 
 ## BitGo
 
@@ -82,8 +99,9 @@ against the real API and the mock without edits.
 | Test | `https://app.bitgo-test.com` |
 | Mock | `http://127.0.0.1:9003` |
 
-Set `BITGO_BASE_URL` to the host only. Paths keep their `/api/v2` prefix, since an
-absolute path replaces any path already on the base URL.
+Set `BITGO_BASE_URL` to the host only. Paths keep their `/api/v2` prefix. Real
+mode replaces any path on the base; mockoon mode joins the path onto the mock
+base so Docker proxy prefixes work.
 
 Start the mock from the `unity-dependencies` checkout:
 
@@ -126,8 +144,9 @@ the real API and the mock without edits.
 | Production | `https://api.atb.com` |
 | Mock | `http://127.0.0.1:9004` |
 
-Set `ATB_BASE_URL` to the host only. Paths keep their `/fdx` prefix, since an
-absolute path replaces any path already on the base URL. Token issuance uses
+Set `ATB_BASE_URL` to the host only. Paths keep their `/fdx` prefix. Real mode
+replaces any path on the base; mockoon mode joins the path onto the mock base
+(do not put `/fdx` on `ATB_MOCKOON_BASE_URL`). Token issuance uses
 `ATB_AUTH_URL` (`POST /atbaccesstokens/v2`); the unity-dependencies mock does
 not implement that route.
 
@@ -163,8 +182,10 @@ the node:
 | Path | Chain |
 | --- | --- |
 | `/btc` | Bitcoin |
-| `/eth` | Ethereum |
-| `/base` | Base |
+| `/eth` | Ethereum full |
+| `/eth-archive` | Ethereum archive |
+| `/base` | Base full |
+| `/base-archive` | Base archive |
 | `/tempo` | Tempo |
 | `/basesepolia` | Base Sepolia |
 | `/ethsepolia` | Ethereum Sepolia |
@@ -173,11 +194,23 @@ the node:
 | --- | --- |
 | PublicNode (default) | `https://<chain>-rpc.publicnode.com` (see `.env.example`) |
 | Dedicated host | set `ALLNODES_<CHAIN>_RPC_URL` |
+| Mockoon | `ALLNODES_MOCKOON_BASE_URL` |
+
+Host Mockoon is `http://127.0.0.1:9005`. Docker Compose mock-proxy is
+`http://127.0.0.1:8085/_mock/ns/<namespace>` (chain comes from the path:
+`/eth` → `.../ns/local/eth`).
+
+```bash
+npx @mockoon/cli@9.8.0 start --data mocks/allnodes/v1/mockoon.json --port 9005
+# or: make mock-allnodes-up
+# or: docker compose up --wait allnodes-mock allnodes-proxy
+```
 
 `user:pass` in a dedicated URL is sent as HTTP Basic and stripped from the
 request URL. PublicNode needs no auth. Wallet RPCs such as Bitcoin `getbalance`
 are blocked on PublicNode; they need a dedicated node and
-`ALLNODES_BTC_WALLET` (Bitcoin Core path `/wallet/<name>`).
+`ALLNODES_BTC_WALLET` (Bitcoin Core path `/wallet/<name>`). On mockoon they use
+`/btc/wallet/syn-wallet-0001`.
 
 Presets use POST JSON-RPC for the in-scope chain, wallet, and transaction
 commands. Placeholders are filled before the request:
@@ -189,14 +222,16 @@ commands. Placeholders are filled before the request:
 | `{walletName}` | `ALLNODES_BTC_WALLET` | `ALLNODES_MOCK_BTC_WALLET` (`syn-wallet-0001`) |
 
 JSON-RPC errors still return HTTP 200 with an `error` object in the body.
+Query `{ "scenario": "stale" }` selects a catalog scenario (Mockoon header/query
+rules), same as the other provider mocks.
 
 ```bash
-# Example: Ethereum chain id via the local relay
+# Example: Ethereum chain id via the local mock
 curl -sS http://localhost:3000/api/request \
   -H 'Content-Type: application/json' \
   -d '{
     "provider": "allnodes",
-    "target": "real",
+    "target": "mockoon",
     "method": "POST",
     "path": "/eth",
     "body": { "jsonrpc": "2.0", "id": 1, "method": "eth_chainId", "params": [] }

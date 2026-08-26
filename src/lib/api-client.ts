@@ -29,7 +29,9 @@ const ATB_AUTH_RENEW_BEFORE_MS = 60 * 1000;
 export const ALLNODES_CHAINS = [
   'btc',
   'eth',
+  'eth-archive',
   'base',
+  'base-archive',
   'tempo',
   'basesepolia',
   'ethsepolia',
@@ -39,6 +41,7 @@ export type AllnodesChain = (typeof ALLNODES_CHAINS)[number];
 const ALLNODES_CHAIN_ALIASES: Record<string, AllnodesChain> = {
   bitcoin: 'btc',
   ethereum: 'eth',
+  'ethereum-archive': 'eth-archive',
   'base-sepolia': 'basesepolia',
   'eth-sepolia': 'ethsepolia',
 };
@@ -67,7 +70,9 @@ const DEFAULT_ALLNODES_MOCK_BTC_WALLET = 'syn-wallet-0001';
 const ALLNODES_RPC_URL_ENV: Record<AllnodesChain, string> = {
   btc: 'ALLNODES_BTC_RPC_URL',
   eth: 'ALLNODES_ETH_RPC_URL',
+  'eth-archive': 'ALLNODES_ETH_ARCHIVE_RPC_URL',
   base: 'ALLNODES_BASE_RPC_URL',
+  'base-archive': 'ALLNODES_BASE_ARCHIVE_RPC_URL',
   tempo: 'ALLNODES_TEMPO_RPC_URL',
   basesepolia: 'ALLNODES_BASESEPOLIA_RPC_URL',
   ethsepolia: 'ALLNODES_ETHSEPOLIA_RPC_URL',
@@ -76,7 +81,9 @@ const ALLNODES_RPC_URL_ENV: Record<AllnodesChain, string> = {
 const DEFAULT_ALLNODES_RPC_URL: Record<AllnodesChain, string> = {
   btc: 'https://bitcoin-rpc.publicnode.com',
   eth: 'https://ethereum-rpc.publicnode.com',
+  'eth-archive': 'https://ethereum-rpc.publicnode.com',
   base: 'https://base-rpc.publicnode.com',
+  'base-archive': 'https://base-rpc.publicnode.com',
   tempo: 'https://tempo-rpc.publicnode.com',
   basesepolia: 'https://base-sepolia-rpc.publicnode.com',
   ethsepolia: 'https://ethereum-sepolia-rpc.publicnode.com',
@@ -246,7 +253,7 @@ function parseAllnodesPath(
 
   if (!isAllnodesChain(chain)) {
     throw new Error(
-      'Allnodes path must be one of /btc, /eth, /base, /tempo, /basesepolia, /ethsepolia.',
+      'Allnodes path must be one of /btc, /eth, /eth-archive, /base, /base-archive, /tempo, /basesepolia, /ethsepolia.',
     );
   }
 
@@ -376,6 +383,10 @@ function joinRpcPath(href: string, rpcSuffix: string): string {
   const basePath = url.pathname.replace(/\/+$/, '');
   url.pathname = `${basePath}${rpcSuffix.startsWith('/') ? rpcSuffix : `/${rpcSuffix}`}`;
   return url.href;
+}
+
+function joinMockoonUrl(base: string, path: string): URL {
+  return new URL(joinRpcPath(base, path.startsWith('/') ? path : `/${path}`));
 }
 
 async function resolveAllnodesLiveValues(
@@ -926,14 +937,16 @@ export async function callApi({
     resolvedBody = applyPlaceholders(body, vars);
 
     if (target === 'mockoon') {
-      url = new URL(
-        `/${chain}${rpcSuffix}`,
+      url = joinMockoonUrl(
         getTargetBaseUrl(provider, target),
+        `/${chain}${rpcSuffix}`,
       );
     } else {
       url = new URL(joinRpcPath(stripped.href, rpcSuffix));
       basicAuth = stripped.authorization;
     }
+  } else if (target === 'mockoon') {
+    url = joinMockoonUrl(getTargetBaseUrl(provider, target), normalizedPath);
   } else {
     url = new URL(normalizedPath, getTargetBaseUrl(provider, target));
   }
