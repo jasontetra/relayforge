@@ -89,6 +89,14 @@ const providerInfo: Record<
       'Path selects the chain (/btc, /eth, /eth-archive, /base, /base-archive, /tempo, /basesepolia, /ethsepolia). The JSON-RPC body is posted to that node. Mockoon is ALLNODES_MOCKOON_BASE_URL: host Mockoon http://127.0.0.1:9005, or Docker proxy http://127.0.0.1:8085/_mock/ns/<namespace> (chain is joined from the path). Query { "scenario": "stale" } selects a catalog scenario on host Mockoon. Real mode defaults to PublicNode; override ALLNODES_*_RPC_URL for dedicated hosts. user:pass in a URL becomes HTTP Basic. Placeholders {txHash}, {blockHash}, {btcBlockHash}, and {btcTxid} are filled from the live node; mockoon uses synthetic ids. BTC wallet RPCs use /btc/wallet/{walletName} (ALLNODES_BTC_WALLET on real, syn-wallet-0001 on mock).',
     authSummary: 'URL Basic (optional)',
   },
+  ledger: {
+    label: 'Ledger',
+    defaultMethod: 'GET',
+    defaultPath: '/accounts',
+    notes:
+      'Vault API v1 paths (GET /accounts, /entities, /transactions, /currencies). Account search filters: id, currency, account_type, name, entity, status, parent, created_after/before, page, page_size. Transaction search filters: account, status, type, tx_hash, currency, id, interaction_type, created_after/before, page, page_size (account+status and account+page are AND). ETH 1001 is native (empty token_accounts + EthereumStakingInfo); ERC-20 child 1005 is type Erc20 with parent 1001 and USDC send 4011. SOL 1004 is native (SPL LightTokenAccount, SolanaStakingInfo, STAKE_CREATE_DELEGATE 4009, SEND_SPL_TOKEN_CHECKED 4010). GET /accounts?currency=ethereum returns native ETH 1001/1002 only; currency=solana returns native SOL 1004 only. ERC-20 child 1005 is omitted from the default four-account list and from currency=ethereum (use account_type=Erc20 or parent=1001). GET /accounts/:id/tokens returns a bare LightTokenAccount array (SPL on 1004; empty on ETH/BTC/ERC-20). GET /accounts/:id/currency returns {amount_units, fees_units}; /balances/history, /erc20-children-accounts, and GET /currencies/tokens are mocked. Mockoon is LEDGER_MOCKOON_BASE_URL: host Mockoon http://127.0.0.1:9006, or Docker proxy http://127.0.0.1:8086/_mock/ns/<namespace>. Real mode posts to /auth/token with LEDGER_API_KEY_ID + LEDGER_API_KEY_SECRET and sends Authorization Bearer plus X-Ledger-Workspace (LEDGER_WORKSPACE or LEDGER_VAULT_NAME). Placeholders {accountId}, {entityId}, and {txId} resolve per target. Query { "scenario": "rate_limited" } selects a catalog scenario on host Mockoon.',
+    authSummary: 'Bearer from /auth/token',
+  },
 };
 
 const exampleQuery = '{\n  "limit": 10\n}';
@@ -438,7 +446,8 @@ export default function Home() {
               <div className='rounded-2xl border border-white/10 bg-white/5 px-4 py-3'>
                 Keep provider secrets in server-side env vars (for example
                 FIREBLOCKS_SECRET_KEY, ALLIUM_API_KEY, COINAPI_API_KEY,
-                BITGO_ACCESS_TOKEN, ATB_PRIVATE_KEY, ALLNODES_*_RPC_URL).
+                BITGO_ACCESS_TOKEN, ATB_PRIVATE_KEY, ALLNODES_*_RPC_URL,
+                LEDGER_API_KEY_ID, LEDGER_API_KEY_SECRET).
               </div>
             </div>
           </div>

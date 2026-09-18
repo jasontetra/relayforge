@@ -37,6 +37,15 @@ ALLNODES_BASE_RPC_URL=https://base-rpc.publicnode.com
 ALLNODES_TEMPO_RPC_URL=https://tempo-rpc.publicnode.com
 ALLNODES_BASESEPOLIA_RPC_URL=https://base-sepolia-rpc.publicnode.com
 ALLNODES_ETHSEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+
+LEDGER_BASE_URL=https://api.vault.ledger.com
+LEDGER_WORKSPACE=
+LEDGER_API_KEY_ID=
+LEDGER_API_KEY_SECRET=
+LEDGER_ACCOUNT_ID=
+LEDGER_ENTITY_ID=
+LEDGER_TX_ID=
+LEDGER_REQUEST_ID=
 ```
 
 Notes:
@@ -48,6 +57,7 @@ Notes:
 - BitGo real mode uses `Bearer BITGO_ACCESS_TOKEN` (`BITGO_API_KEY` still works).
 - ATB real mode posts to `/atbaccesstokens/v2`, then sends `Authorization`, `x-atb-api-key`, and `client_assertion` on FDX routes. Live ATB is IP-allowlisted; laptop calls often fail. `ATB_PRIVATE_KEY` accepts PKCS#1, PKCS#8, or an unencrypted OpenSSH RSA key.
 - Allnodes real mode posts JSON-RPC to the per-chain RPC URL. Defaults are Allnodes PublicNode. Dedicated URLs may include `user:pass` (sent as HTTP Basic).
+- Ledger real mode posts `POST /auth/token` with `LEDGER_API_KEY_ID` + `LEDGER_API_KEY_SECRET` and header `X-Ledger-Workspace` (`LEDGER_WORKSPACE` or `LEDGER_VAULT_NAME`), then sends `Authorization: Bearer` on Vault routes. Optional fallbacks: `LEDGER_ACCESS_TOKEN`, or LAM headers `LEDGER_API_USER` / `LEDGER_API_KEY`.
 - `FIREBLOCKS_SECRET_KEY` and `ATB_PRIVATE_KEY` can use real newlines or escaped `\n` sequences.
 - Keep all secrets server-side only.
 
@@ -70,11 +80,12 @@ COINAPI_MOCKOON_BASE_URL=http://127.0.0.1:9000
 BITGO_MOCKOON_BASE_URL=http://127.0.0.1:9003
 ATB_MOCKOON_BASE_URL=http://127.0.0.1:9004
 ALLNODES_MOCKOON_BASE_URL=http://127.0.0.1:9005
+LEDGER_MOCKOON_BASE_URL=http://127.0.0.1:9006
 ```
 
-Docker Compose publishes the proxies (`:8080`–`:8085`), not the Mockoon ports.
+Docker Compose publishes the proxies (`:8080`–`:8086`), not the Mockoon ports.
 Namespace only — RelayForge paths already include `/v1`, `/api/v2`, `/fdx`,
-and Allnodes chain (`/eth`, `/btc`, …):
+Allnodes chain (`/eth`, `/btc`, …), and Ledger Vault paths (`/accounts`, …):
 
 ```bash
 FIREBLOCKS_MOCKOON_BASE_URL=http://127.0.0.1:8081/_mock/ns/local
@@ -83,6 +94,7 @@ COINAPI_MOCKOON_BASE_URL=http://127.0.0.1:8080/_mock/ns/local
 BITGO_MOCKOON_BASE_URL=http://127.0.0.1:8083/_mock/ns/local
 ATB_MOCKOON_BASE_URL=http://127.0.0.1:8084/_mock/ns/local
 ALLNODES_MOCKOON_BASE_URL=http://127.0.0.1:8085/_mock/ns/local
+LEDGER_MOCKOON_BASE_URL=http://127.0.0.1:8086/_mock/ns/local
 ```
 
 Query `{ "scenario": "stale" }` selects a catalog scenario against host Mockoon.
@@ -238,6 +250,83 @@ curl -sS http://localhost:3000/api/request \
   }'
 ```
 
+## Ledger
+
+Ledger Vault API v1 serves the same `/accounts`, `/entities`, `/transactions`,
+`/requests`, and `/currencies` paths in both modes, so a preset works against
+the real API and the mock without edits. This is Vault API v1 at
+`api.vault.ledger.com`, not REST v2 `/v1/rest`.
+
+| | Base URL |
+| --- | --- |
+| Live | `https://api.vault.ledger.com` |
+| Mock | `http://127.0.0.1:9006` |
+
+Set `LEDGER_BASE_URL` to the host only. Paths keep their `/accounts` (etc.)
+prefix. Real mode replaces any path on the base; mockoon mode joins the path
+onto the mock base so Docker proxy prefixes work.
+
+Live auth matches Vault API v1 and the Unity SDK: `POST /auth/token` with
+`api_key_id` / `api_key_secret` and `X-Ledger-Workspace`, then
+`Authorization: Bearer` plus `X-Ledger-Workspace` on later requests. Tokens
+expire in about 300s and are refreshed automatically. Workspace is
+`LEDGER_WORKSPACE` or `LEDGER_VAULT_NAME` (SSM `/unity/ledger/vault-name`).
+API key id/secret are the values from “Generate API Access” (SSM
+`/{env}/ledger-user-id` and `/{env}/ledger-user-secret` in Unity).
+
+Account-scoped presets use placeholders resolved per target:
+
+| Placeholder | Real | Mockoon |
+| --- | --- | --- |
+| `{accountId}` | `LEDGER_ACCOUNT_ID` | `LEDGER_MOCK_ACCOUNT_ID` (`1001`) |
+| `{entityId}` | `LEDGER_ENTITY_ID` | `LEDGER_MOCK_ENTITY_ID` (`2001`) |
+| `{txId}` | `LEDGER_TX_ID` | `LEDGER_MOCK_TX_ID` (`4001`) |
+| `{requestId}` | `LEDGER_REQUEST_ID` | `LEDGER_MOCK_REQUEST_ID` (`5001`) |
+
+`GET /accounts` and `GET /currencies` need no ids. Bitcoin/Solana get-account
+presets still use mock ids `1003`/`1004`.
+
+Start the mock from the `unity-dependencies` checkout:
+
+```bash
+npx @mockoon/cli@9.8.0 start --data mocks/ledger/v1/mockoon.json --port 9006
+# or: make mock-ledger-up
+# or: docker compose up --wait ledger-mock ledger-proxy
+```
+
+Host Mockoon is `http://127.0.0.1:9006`. Docker Compose mock-proxy is
+`http://127.0.0.1:8086/_mock/ns/<namespace>`.
+
+Presets use ids the mock resolves, so every preset runs unedited in mockoon
+mode. Set live ids in env for real mode. Ids the mock knows:
+
+- Entity: `2001`
+- Accounts: `1001` (ethereum), `1002` (ethereum), `1003` (`bitcoin_testnet`), `1004` (solana, with USDC SPL token accounts)
+- Transactions: `4001`–`4004`
+- Request: `5001`
+- Token: `GET /currencies/solana/tokens/USDCsyn11111111111111111111111111111111111`
+
+To exercise a non-default mock scenario such as `rate_limited`, `unauthorized`,
+`provider_error`, or `stale_data`, add it to the Query JSON:
+
+```json
+{ "scenario": "rate_limited" }
+```
+
+Through the proxy, assign the namespace scenario via the admin API instead.
+
+```bash
+# Example: list accounts via the local mock
+curl -sS http://localhost:3000/api/request \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "provider": "ledger",
+    "target": "mockoon",
+    "method": "GET",
+    "path": "/accounts"
+  }'
+```
+
 ## Run
 
 ```bash
@@ -253,6 +342,7 @@ Open `http://localhost:3000` and use the form to send requests such as:
 - BitGo: `GET /api/v2/hteth/wallet`
 - ATB: `GET /fdx/5.3/accounts`
 - Allnodes: `POST /eth` with `{ "jsonrpc": "2.0", "id": 1, "method": "eth_chainId", "params": [] }`
+- Ledger: `GET /accounts`
 
 ## How it works
 

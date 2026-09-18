@@ -13,6 +13,16 @@ const DEFAULT_FIREBLOCKS_BASE_URL = 'https://api.fireblocks.io/v1';
 const DEFAULT_ALLIUM_BASE_URL = 'https://api.allium.so';
 const DEFAULT_COINAPI_BASE_URL = 'https://rest.coinapi.io';
 const DEFAULT_BITGO_BASE_URL = 'https://app.bitgo.com';
+const DEFAULT_LEDGER_BASE_URL = 'https://api.vault.ledger.com';
+const LEDGER_AUTH_RENEW_BEFORE_MS = 60 * 1000;
+const LEDGER_ACCOUNT_PLACEHOLDER = '{accountId}';
+const LEDGER_ENTITY_PLACEHOLDER = '{entityId}';
+const LEDGER_TX_PLACEHOLDER = '{txId}';
+const LEDGER_REQUEST_PLACEHOLDER = '{requestId}';
+const DEFAULT_LEDGER_MOCK_ACCOUNT_ID = '1001';
+const DEFAULT_LEDGER_MOCK_ENTITY_ID = '2001';
+const DEFAULT_LEDGER_MOCK_TX_ID = '4001';
+const DEFAULT_LEDGER_MOCK_REQUEST_ID = '5001';
 const DEFAULT_ATB_BASE_URL = 'https://preprod.api.atb.com';
 const DEFAULT_ATB_AUTH_URL = 'https://preprod.api.atb.com';
 const DEFAULT_ATB_MOCK_ACCOUNT_ID = 'syn-acct-0001';
@@ -96,7 +106,8 @@ export type ProviderId =
   | 'coinapi'
   | 'bitgo'
   | 'atb'
-  | 'allnodes';
+  | 'allnodes'
+  | 'ledger';
 export type ServerTarget = 'real' | 'mockoon' | 'both';
 export type ForwardTarget = Exclude<ServerTarget, 'both'>;
 
@@ -118,6 +129,7 @@ const MOCKOON_BASE_URL_ENV: Record<ProviderId, string> = {
   bitgo: 'BITGO_MOCKOON_BASE_URL',
   atb: 'ATB_MOCKOON_BASE_URL',
   allnodes: 'ALLNODES_MOCKOON_BASE_URL',
+  ledger: 'LEDGER_MOCKOON_BASE_URL',
 };
 
 function getEnv(name: string): string {
@@ -508,6 +520,69 @@ function syntheticAllnodesValues(): Record<string, string> {
   };
 }
 
+function ledgerPlaceholderValue(
+  target: ForwardTarget,
+  realEnv: string,
+  mockEnv: string,
+  mockDefault: string,
+): string {
+  if (target === 'mockoon') {
+    return process.env[mockEnv]?.trim() || mockDefault;
+  }
+  return getEnv(realEnv);
+}
+
+function resolveLedgerIds(
+  path: string,
+  query: ApiRequestInput['query'],
+  target: ForwardTarget,
+): { path: string; query: ApiRequestInput['query'] } {
+  const haystack = `${path}\n${JSON.stringify(query ?? {})}`;
+  const vars: Record<string, string> = {};
+
+  if (placeholderNeeded(haystack, LEDGER_ACCOUNT_PLACEHOLDER)) {
+    vars.accountId = ledgerPlaceholderValue(
+      target,
+      'LEDGER_ACCOUNT_ID',
+      'LEDGER_MOCK_ACCOUNT_ID',
+      DEFAULT_LEDGER_MOCK_ACCOUNT_ID,
+    );
+  }
+  if (placeholderNeeded(haystack, LEDGER_ENTITY_PLACEHOLDER)) {
+    vars.entityId = ledgerPlaceholderValue(
+      target,
+      'LEDGER_ENTITY_ID',
+      'LEDGER_MOCK_ENTITY_ID',
+      DEFAULT_LEDGER_MOCK_ENTITY_ID,
+    );
+  }
+  if (placeholderNeeded(haystack, LEDGER_TX_PLACEHOLDER)) {
+    vars.txId = ledgerPlaceholderValue(
+      target,
+      'LEDGER_TX_ID',
+      'LEDGER_MOCK_TX_ID',
+      DEFAULT_LEDGER_MOCK_TX_ID,
+    );
+  }
+  if (placeholderNeeded(haystack, LEDGER_REQUEST_PLACEHOLDER)) {
+    vars.requestId = ledgerPlaceholderValue(
+      target,
+      'LEDGER_REQUEST_ID',
+      'LEDGER_MOCK_REQUEST_ID',
+      DEFAULT_LEDGER_MOCK_REQUEST_ID,
+    );
+  }
+
+  if (Object.keys(vars).length === 0) {
+    return { path, query };
+  }
+
+  return {
+    path: String(applyPlaceholders(path, vars)),
+    query: applyPlaceholders(query, vars) as ApiRequestInput['query'],
+  };
+}
+
 function resolveProviderPlaceholders(
   provider: ProviderId,
   path: string,
@@ -519,6 +594,9 @@ function resolveProviderPlaceholders(
   }
   if (provider === 'atb') {
     return resolveAtbAccount(normalizePath(path), query, target);
+  }
+  if (provider === 'ledger') {
+    return resolveLedgerIds(normalizePath(path), query, target);
   }
   return { path: normalizePath(path), query };
 }
@@ -742,6 +820,90 @@ async function ensureAtbAuth(): Promise<AtbAuthState> {
   return atbAuthInflight;
 }
 
+type LedgerAuthState = {
+  accessToken: string;
+  workspace: string;
+  tokenExpiryMs: number;
+};
+
+let ledgerAuth: LedgerAuthState | null = null;
+let ledgerAuthInflight: Promise<LedgerAuthState> | null = null;
+
+function getLedgerWorkspace(): string {
+  return getEnvAny('LEDGER_WORKSPACE', 'LEDGER_VAULT_NAME');
+}
+
+function ledgerAuthStillValid(state: LedgerAuthState, now = Date.now()): boolean {
+  return Boolean(state.accessToken) && now + LEDGER_AUTH_RENEW_BEFORE_MS < state.tokenExpiryMs;
+}
+
+async function refreshLedgerAuth(): Promise<LedgerAuthState> {
+  const workspace = getLedgerWorkspace();
+  const keyId = getEnv('LEDGER_API_KEY_ID');
+  const keySecret = getEnv('LEDGER_API_KEY_SECRET');
+  const tokenUrl = new URL(
+    '/auth/token',
+    process.env.LEDGER_BASE_URL?.trim() || DEFAULT_LEDGER_BASE_URL,
+  );
+
+  const response = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Ledger-Workspace': workspace,
+    },
+    body: JSON.stringify({
+      api_key_id: keyId,
+      api_key_secret: keySecret,
+    }),
+    cache: 'no-store',
+  });
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    throw new Error(
+      `Ledger token request failed: ${response.status} ${response.statusText}${
+        responseText ? ` — ${responseText.slice(0, 300)}` : ''
+      }`,
+    );
+  }
+
+  let parsed: { access_token?: string; expires_in?: number };
+  try {
+    parsed = JSON.parse(responseText) as {
+      access_token?: string;
+      expires_in?: number;
+    };
+  } catch {
+    throw new Error('Ledger token response was not JSON.');
+  }
+
+  if (!parsed.access_token) {
+    throw new Error('Ledger token response missing access_token.');
+  }
+
+  const expiresInMs = Math.max((parsed.expires_in ?? 300) - 60, 1) * 1000;
+  ledgerAuth = {
+    accessToken: parsed.access_token,
+    workspace,
+    tokenExpiryMs: Date.now() + expiresInMs,
+  };
+  return ledgerAuth;
+}
+
+async function ensureLedgerAuth(): Promise<LedgerAuthState> {
+  if (ledgerAuth && ledgerAuthStillValid(ledgerAuth)) {
+    return ledgerAuth;
+  }
+  if (ledgerAuthInflight) {
+    return ledgerAuthInflight;
+  }
+  ledgerAuthInflight = refreshLedgerAuth().finally(() => {
+    ledgerAuthInflight = null;
+  });
+  return ledgerAuthInflight;
+}
+
 function collectJsonPaths(value: unknown, prefix = '', into = new Set<string>()) {
   if (value === null || value === undefined) {
     if (prefix) {
@@ -827,6 +989,10 @@ function getTargetBaseUrl(provider: ProviderId, target: ForwardTarget): string {
     throw new Error('Allnodes RPC URL is selected per chain, not from a shared base.');
   }
 
+  if (provider === 'ledger') {
+    return process.env.LEDGER_BASE_URL?.trim() || DEFAULT_LEDGER_BASE_URL;
+  }
+
   return process.env.BITGO_BASE_URL?.trim() || DEFAULT_BITGO_BASE_URL;
 }
 
@@ -885,6 +1051,55 @@ function buildHeaders({
       headers.client_assertion_type = ATB_ASSERTION_TYPE;
       return headers;
     });
+  }
+
+  if (provider === 'ledger') {
+    const workspace =
+      process.env.LEDGER_WORKSPACE?.trim() ||
+      process.env.LEDGER_VAULT_NAME?.trim();
+    const keyId = process.env.LEDGER_API_KEY_ID?.trim();
+    const keySecret = process.env.LEDGER_API_KEY_SECRET?.trim();
+    const staticToken = process.env.LEDGER_ACCESS_TOKEN?.trim();
+    const apiUser =
+      process.env.LEDGER_API_USER?.trim() || process.env.LEDGER_USER?.trim();
+    const apiKey =
+      process.env.LEDGER_API_KEY?.trim() || process.env.LEDGER_KEY?.trim();
+
+    if (keyId || keySecret) {
+      if (!keyId || !keySecret) {
+        throw new Error(
+          'Set both LEDGER_API_KEY_ID and LEDGER_API_KEY_SECRET for live Vault token auth.',
+        );
+      }
+      return ensureLedgerAuth().then((auth) => {
+        headers.Authorization = `Bearer ${auth.accessToken}`;
+        headers['X-Ledger-Workspace'] = auth.workspace;
+        return headers;
+      });
+    }
+
+    if (staticToken) {
+      headers.Authorization = `Bearer ${staticToken}`;
+      if (workspace) {
+        headers['X-Ledger-Workspace'] = workspace;
+      }
+      return Promise.resolve(headers);
+    }
+
+    if (apiUser) {
+      headers['X-Ledger-API-User'] = apiUser;
+      if (apiKey) {
+        headers['X-Ledger-API-Key'] = apiKey;
+      }
+      if (workspace) {
+        headers['X-Ledger-Workspace'] = workspace;
+      }
+      return Promise.resolve(headers);
+    }
+
+    throw new Error(
+      'Set LEDGER_API_KEY_ID, LEDGER_API_KEY_SECRET, and LEDGER_WORKSPACE (or LEDGER_VAULT_NAME) for live Vault token auth. Alternatively set LEDGER_ACCESS_TOKEN, or LEDGER_API_USER for LAM headers.',
+    );
   }
 
   return Promise.resolve(headers);

@@ -20,7 +20,8 @@ export type ProviderId =
   | 'coinapi'
   | 'bitgo'
   | 'atb'
-  | 'allnodes';
+  | 'allnodes'
+  | 'ledger';
 
 export const fireblockPresetsGrouped: PresetGroup[] = [
   {
@@ -420,6 +421,308 @@ export const allnodesPresetsGrouped: PresetGroup[] = [
   { category: 'ETHSepolia', presets: evmChainPresets('ethsepolia') },
 ];
 
+const LEDGER_ACCOUNT_ID = '{accountId}';
+const LEDGER_ENTITY_ID = '{entityId}';
+const LEDGER_TX_ID = '{txId}';
+const LEDGER_BTC_ACCOUNT_ID = 1003;
+const LEDGER_SOL_ACCOUNT_ID = 1004;
+const LEDGER_ERC20_ACCOUNT_ID = 1005;
+const LEDGER_USDC_CONTRACT =
+  'USDCsyn11111111111111111111111111111111111';
+
+export const ledgerPresetsGrouped: PresetGroup[] = [
+  {
+    category: 'Accounts',
+    presets: [
+      {
+        label: 'List Accounts',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/accounts',
+      },
+      {
+        label: 'Get Account',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/accounts/${LEDGER_ACCOUNT_ID}`,
+      },
+      {
+        label: 'Get Account Currency',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/accounts/${LEDGER_ACCOUNT_ID}/currency`,
+      },
+      {
+        label: 'Get Account Balances',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/accounts/${LEDGER_ACCOUNT_ID}/balances`,
+      },
+      {
+        label: 'Get Account Balances History',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/accounts/${LEDGER_ACCOUNT_ID}/balances/history`,
+      },
+      {
+        label: 'Get ERC-20 Children',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/accounts/${LEDGER_ACCOUNT_ID}/erc20-children-accounts`,
+      },
+      {
+        label: 'Get Account Tokens',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/accounts/${LEDGER_ACCOUNT_ID}/tokens`,
+      },
+      {
+        label: 'Get Solana Account Tokens',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/accounts/${LEDGER_SOL_ACCOUNT_ID}/tokens`,
+      },
+      {
+        label: 'Get Bitcoin Account',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/accounts/${LEDGER_BTC_ACCOUNT_ID}`,
+      },
+      {
+        label: 'Get Solana Account',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/accounts/${LEDGER_SOL_ACCOUNT_ID}`,
+      },
+      {
+        label: 'Get ERC-20 Account',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/accounts/${LEDGER_ERC20_ACCOUNT_ID}`,
+      },
+      {
+        label: 'Search Account by Id',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/accounts',
+        query: `{\n  "id": "${LEDGER_ACCOUNT_ID}"\n}`,
+      },
+      {
+        label: 'Search Accounts by Currency',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/accounts',
+        query: '{\n  "currency": "solana"\n}',
+      },
+      {
+        label: 'Search Accounts by Entity',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/accounts',
+        query: `{\n  "entity": "${LEDGER_ENTITY_ID}"\n}`,
+      },
+      {
+        label: 'Search Accounts by Status',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/accounts',
+        query: '{\n  "status": "ACTIVE"\n}',
+      },
+      {
+        label: 'Search Accounts by Name',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/accounts',
+        query: '{\n  "name": "tledger-test-account-eth-01"\n}',
+      },
+      {
+        label: 'Search Accounts by Type Erc20',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/accounts',
+        query: '{\n  "account_type": "Erc20"\n}',
+      },
+      {
+        label: 'Search Accounts by Parent',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/accounts',
+        query: `{\n  "parent": "${LEDGER_ACCOUNT_ID}"\n}`,
+      },
+      {
+        label: 'List Accounts Page 1',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/accounts',
+        query: '{\n  "page": 1,\n  "page_size": 2\n}',
+      },
+    ],
+  },
+  {
+    category: 'Entities',
+    presets: [
+      {
+        label: 'Get Entity',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/entities/${LEDGER_ENTITY_ID}`,
+      },
+      {
+        label: 'Search Entities by Account',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/entities',
+        query: `{\n  "account": "${LEDGER_ACCOUNT_ID}"\n}`,
+      },
+    ],
+  },
+  {
+    category: 'Transactions',
+    presets: [
+      {
+        label: 'List Account Transactions',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions',
+        query: `{\n  "account": "${LEDGER_ACCOUNT_ID}"\n}`,
+      },
+      {
+        label: 'Search Transactions by Status',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions',
+        query: '{\n  "status": "CONFIRMED"\n}',
+      },
+      {
+        label: 'Search Account Transactions by Status',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions',
+        query: `{\n  "account": "${LEDGER_ACCOUNT_ID}",\n  "status": "CONFIRMED"\n}`,
+      },
+      {
+        label: 'Search Transactions by Type',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions',
+        query: '{\n  "type": "SEND"\n}',
+      },
+      {
+        label: 'Search Transactions by Hash',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions',
+        query: `{\n  "tx_hash": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"\n}`,
+      },
+      {
+        label: 'List Transactions Page 1',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions',
+        query: '{\n  "page": 1,\n  "page_size": 2\n}',
+      },
+      {
+        label: 'Search Transactions Created After',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions',
+        query: '{\n  "created_after": "2026-06-25T00:00:00.000Z"\n}',
+      },
+      {
+        label: 'Get Transaction',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/transactions/${LEDGER_TX_ID}`,
+      },
+      {
+        label: 'List Solana Transactions',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions',
+        query: `{\n  "account": "${LEDGER_SOL_ACCOUNT_ID}"\n}`,
+      },
+      {
+        label: 'Get Solana Stake Transaction',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions/4009',
+      },
+      {
+        label: 'Get SPL Token Transfer',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions/4010',
+      },
+      {
+        label: 'List ERC-20 Transactions',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions',
+        query: `{\n  "account": "${LEDGER_ERC20_ACCOUNT_ID}"\n}`,
+      },
+      {
+        label: 'List SPL Token Transactions',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions',
+        query: `{\n  "account": "${LEDGER_SOL_ACCOUNT_ID}",\n  "type": "SEND_SPL_TOKEN_CHECKED"\n}`,
+      },
+      {
+        label: 'Get ERC-20 Transfer',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/transactions/4011',
+      },
+    ],
+  },
+  {
+    category: 'Currencies',
+    presets: [
+      {
+        label: 'List Currencies',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/currencies',
+      },
+      {
+        label: 'List Tokens',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/currencies/tokens',
+      },
+      {
+        label: 'Get Currency',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/currencies/ethereum',
+      },
+      {
+        label: 'Get Solana Token',
+        provider: 'ledger',
+        method: 'GET',
+        path: `/currencies/solana/tokens/${LEDGER_USDC_CONTRACT}`,
+      },
+      {
+        label: 'Get Ethereum Token',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/currencies/ethereum/tokens/0x000000000000000000000000000000000000c0de',
+      },
+    ],
+  },
+  {
+    category: 'Notifications',
+    presets: [
+      {
+        label: 'Notification Configuration',
+        provider: 'ledger',
+        method: 'GET',
+        path: '/notifications/configuration',
+      },
+    ],
+  },
+];
+
 // Flatten grouped presets for backward compatibility
 export const allPresets: Preset[] = [
   ...fireblockPresetsGrouped.flatMap((g) => g.presets),
@@ -428,6 +731,7 @@ export const allPresets: Preset[] = [
   ...bitgoPresetsGrouped.flatMap((g) => g.presets),
   ...atbPresetsGrouped.flatMap((g) => g.presets),
   ...allnodesPresetsGrouped.flatMap((g) => g.presets),
+  ...ledgerPresetsGrouped.flatMap((g) => g.presets),
 ];
 
 // Grouped presets by provider
@@ -438,4 +742,5 @@ export const presetsGroupedByProvider: Record<ProviderId, PresetGroup[]> = {
   bitgo: bitgoPresetsGrouped,
   atb: atbPresetsGrouped,
   allnodes: allnodesPresetsGrouped,
+  ledger: ledgerPresetsGrouped,
 };
