@@ -97,6 +97,14 @@ const providerInfo: Record<
       'Vault API v1 paths (GET /accounts, /entities, /transactions, /currencies). Account search filters: id, currency, account_type, name, entity, status, parent, created_after/before, page, page_size. Transaction search filters: account, status, type, tx_hash, currency, id, interaction_type, created_after/before, page, page_size (account+status and account+page are AND). ETH 1001 is native (empty token_accounts + EthereumStakingInfo); ERC-20 child 1005 is type Erc20 with parent 1001 and USDC send 4011. SOL 1004 is native (SPL LightTokenAccount, SolanaStakingInfo, STAKE_CREATE_DELEGATE 4009, SEND_SPL_TOKEN_CHECKED 4010). GET /accounts?currency=ethereum returns native ETH 1001/1002 only; currency=solana returns native SOL 1004 only. ERC-20 child 1005 is omitted from the default four-account list and from currency=ethereum (use account_type=Erc20 or parent=1001). GET /accounts/:id/tokens returns a bare LightTokenAccount array (SPL on 1004; empty on ETH/BTC/ERC-20). GET /accounts/:id/currency returns {amount_units, fees_units}; /balances/history, /erc20-children-accounts, and GET /currencies/tokens are mocked. Mockoon is LEDGER_MOCKOON_BASE_URL: host Mockoon http://127.0.0.1:9006, or Docker proxy http://127.0.0.1:8086/_mock/ns/<namespace>. Real mode posts to /auth/token with LEDGER_API_KEY_ID + LEDGER_API_KEY_SECRET and sends Authorization Bearer plus X-Ledger-Workspace (LEDGER_WORKSPACE or LEDGER_VAULT_NAME). Placeholders {accountId}, {entityId}, and {txId} resolve per target. Query { "scenario": "rate_limited" } selects a catalog scenario on host Mockoon.',
     authSummary: 'Bearer from /auth/token',
   },
+  anchorage: {
+    label: 'Anchorage',
+    defaultMethod: 'GET',
+    defaultPath: '/v2/asset-types',
+    notes:
+      'Digital API v2 reads (GET /v2/asset-types, /v2/vaults, /v2/vaults/{vaultId}, /v2/vaults/{vaultId}/wallets, /v2/wallets/{walletId}, /v2/transactions, /v2/transactions/{id}). Live auth is Api-Access-Key (ANCHORAGE_API_KEY). Mockoon is ANCHORAGE_MOCKOON_BASE_URL: host Mockoon http://127.0.0.1:9007, or Docker proxy http://127.0.0.1:8087/_mock/ns/<namespace>. Placeholders {vaultId}, {walletId}, and {transactionId} resolve per target. Vault 1 is ETHSEP + PYUSD_SEP (wallets 01/03/04); vault 2 is BTC_S native-only plus SOL + USDC_SOL. In-flight withdrawals use INPROGRESS. Query { "scenario": "rate_limited" } selects a catalog scenario on host Mockoon. Writes are out of scope.',
+    authSummary: 'Api-Access-Key',
+  },
 };
 
 const exampleQuery = '{\n  "limit": 10\n}';
@@ -447,7 +455,7 @@ export default function Home() {
                 Keep provider secrets in server-side env vars (for example
                 FIREBLOCKS_SECRET_KEY, ALLIUM_API_KEY, COINAPI_API_KEY,
                 BITGO_ACCESS_TOKEN, ATB_PRIVATE_KEY, ALLNODES_*_RPC_URL,
-                LEDGER_API_KEY_ID, LEDGER_API_KEY_SECRET).
+                LEDGER_API_KEY_ID, LEDGER_API_KEY_SECRET, ANCHORAGE_API_KEY).
               </div>
             </div>
           </div>

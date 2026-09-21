@@ -21,7 +21,8 @@ export type ProviderId =
   | 'bitgo'
   | 'atb'
   | 'allnodes'
-  | 'ledger';
+  | 'ledger'
+  | 'anchorage';
 
 export const fireblockPresetsGrouped: PresetGroup[] = [
   {
@@ -723,6 +724,193 @@ export const ledgerPresetsGrouped: PresetGroup[] = [
   },
 ];
 
+const ANCHORAGE_VAULT_ID = '{vaultId}';
+const ANCHORAGE_WALLET_ID = '{walletId}';
+const ANCHORAGE_TX_ID = '{transactionId}';
+const ANCHORAGE_VAULT_2 = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const ANCHORAGE_WALLET_BTC = '22222222222222222222222222222222';
+const ANCHORAGE_WALLET_EMPTY = '33333333333333333333333333333333';
+const ANCHORAGE_WALLET_ARCHIVED = '44444444444444444444444444444444';
+const ANCHORAGE_WALLET_SOL = '55555555555555555555555555555555';
+const ANCHORAGE_TX_ETH_WITHDRAW = 'bbbb0001000000000000000000000001';
+const ANCHORAGE_TX_BTC = 'cccc0001000000000000000000000001';
+const ANCHORAGE_TX_SOL = 'eeee0001000000000000000000000001';
+const ANCHORAGE_TX_USDC_SOL = 'ffff0001000000000000000000000001';
+const ANCHORAGE_TX_PARTIAL = '550e8400e29b41d4a716446655440001';
+
+export const anchoragePresetsGrouped: PresetGroup[] = [
+  {
+    category: 'Asset types',
+    presets: [
+      {
+        label: 'List Asset Types',
+        provider: 'anchorage',
+        method: 'GET',
+        path: '/v2/asset-types',
+      },
+      {
+        label: 'Filter Asset Types ETHSEP',
+        provider: 'anchorage',
+        method: 'GET',
+        path: '/v2/asset-types',
+        query: '{\n  "assetTypes": "ETHSEP"\n}',
+      },
+    ],
+  },
+  {
+    category: 'Vaults',
+    presets: [
+      {
+        label: 'List Vaults',
+        provider: 'anchorage',
+        method: 'GET',
+        path: '/v2/vaults',
+      },
+      {
+        label: 'Get Vault',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/vaults/${ANCHORAGE_VAULT_ID}`,
+      },
+      {
+        label: 'Get Bitcoin/Solana Vault',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/vaults/${ANCHORAGE_VAULT_2}`,
+      },
+      {
+        label: 'List Vaults After Vault 2',
+        provider: 'anchorage',
+        method: 'GET',
+        path: '/v2/vaults',
+        query: `{\n  "afterId": "${ANCHORAGE_VAULT_2}"\n}`,
+      },
+    ],
+  },
+  {
+    category: 'Wallets',
+    presets: [
+      {
+        label: 'List Vault Wallets',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/vaults/${ANCHORAGE_VAULT_ID}/wallets`,
+      },
+      {
+        label: 'List Vault Wallets Page 2',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/vaults/${ANCHORAGE_VAULT_ID}/wallets`,
+        query: `{\n  "afterId": "${ANCHORAGE_WALLET_EMPTY}"\n}`,
+      },
+      {
+        label: 'List Vault 2 Wallets',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/vaults/${ANCHORAGE_VAULT_2}/wallets`,
+      },
+      {
+        label: 'Get Wallet',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/wallets/${ANCHORAGE_WALLET_ID}`,
+      },
+      {
+        label: 'Get Bitcoin Wallet',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/wallets/${ANCHORAGE_WALLET_BTC}`,
+      },
+      {
+        label: 'Get Empty Wallet',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/wallets/${ANCHORAGE_WALLET_EMPTY}`,
+      },
+      {
+        label: 'Get Archived Wallet',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/wallets/${ANCHORAGE_WALLET_ARCHIVED}`,
+      },
+      {
+        label: 'Get Solana Wallet',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/wallets/${ANCHORAGE_WALLET_SOL}`,
+      },
+    ],
+  },
+  {
+    category: 'Transactions',
+    presets: [
+      {
+        label: 'List All Transactions',
+        provider: 'anchorage',
+        method: 'GET',
+        path: '/v2/transactions',
+      },
+      {
+        label: 'List Vault Transactions',
+        provider: 'anchorage',
+        method: 'GET',
+        path: '/v2/transactions',
+        query: `{\n  "vaultId": "${ANCHORAGE_VAULT_ID}"\n}`,
+      },
+      {
+        label: 'List Vault 2 Transactions',
+        provider: 'anchorage',
+        method: 'GET',
+        path: '/v2/transactions',
+        query: `{\n  "vaultId": "${ANCHORAGE_VAULT_2}"\n}`,
+      },
+      {
+        label: 'List Wallet Transactions',
+        provider: 'anchorage',
+        method: 'GET',
+        path: '/v2/transactions',
+        query: `{\n  "walletId": "${ANCHORAGE_WALLET_ID}"\n}`,
+      },
+      {
+        label: 'Get Transaction',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/transactions/${ANCHORAGE_TX_ID}`,
+      },
+      {
+        label: 'Get ETHSEP Withdrawal',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/transactions/${ANCHORAGE_TX_ETH_WITHDRAW}`,
+      },
+      {
+        label: 'Get Bitcoin Deposit',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/transactions/${ANCHORAGE_TX_BTC}`,
+      },
+      {
+        label: 'Get Solana Deposit',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/transactions/${ANCHORAGE_TX_SOL}`,
+      },
+      {
+        label: 'Get USDC_SOL Transfer',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/transactions/${ANCHORAGE_TX_USDC_SOL}`,
+      },
+      {
+        label: 'Get Partial Transaction',
+        provider: 'anchorage',
+        method: 'GET',
+        path: `/v2/transactions/${ANCHORAGE_TX_PARTIAL}`,
+      },
+    ],
+  },
+];
+
 // Flatten grouped presets for backward compatibility
 export const allPresets: Preset[] = [
   ...fireblockPresetsGrouped.flatMap((g) => g.presets),
@@ -732,6 +920,7 @@ export const allPresets: Preset[] = [
   ...atbPresetsGrouped.flatMap((g) => g.presets),
   ...allnodesPresetsGrouped.flatMap((g) => g.presets),
   ...ledgerPresetsGrouped.flatMap((g) => g.presets),
+  ...anchoragePresetsGrouped.flatMap((g) => g.presets),
 ];
 
 // Grouped presets by provider
@@ -743,4 +932,5 @@ export const presetsGroupedByProvider: Record<ProviderId, PresetGroup[]> = {
   atb: atbPresetsGrouped,
   allnodes: allnodesPresetsGrouped,
   ledger: ledgerPresetsGrouped,
+  anchorage: anchoragePresetsGrouped,
 };

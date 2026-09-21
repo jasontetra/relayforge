@@ -46,6 +46,12 @@ LEDGER_ACCOUNT_ID=
 LEDGER_ENTITY_ID=
 LEDGER_TX_ID=
 LEDGER_REQUEST_ID=
+
+ANCHORAGE_BASE_URL=https://api.anchorage-staging.com
+ANCHORAGE_API_KEY=your-anchorage-api-access-key
+ANCHORAGE_VAULT_ID=
+ANCHORAGE_WALLET_ID=
+ANCHORAGE_TX_ID=
 ```
 
 Notes:
@@ -58,6 +64,7 @@ Notes:
 - ATB real mode posts to `/atbaccesstokens/v2`, then sends `Authorization`, `x-atb-api-key`, and `client_assertion` on FDX routes. Live ATB is IP-allowlisted; laptop calls often fail. `ATB_PRIVATE_KEY` accepts PKCS#1, PKCS#8, or an unencrypted OpenSSH RSA key.
 - Allnodes real mode posts JSON-RPC to the per-chain RPC URL. Defaults are Allnodes PublicNode. Dedicated URLs may include `user:pass` (sent as HTTP Basic).
 - Ledger real mode posts `POST /auth/token` with `LEDGER_API_KEY_ID` + `LEDGER_API_KEY_SECRET` and header `X-Ledger-Workspace` (`LEDGER_WORKSPACE` or `LEDGER_VAULT_NAME`), then sends `Authorization: Bearer` on Vault routes. Optional fallbacks: `LEDGER_ACCESS_TOKEN`, or LAM headers `LEDGER_API_USER` / `LEDGER_API_KEY`.
+- Anchorage real mode sends `Api-Access-Key` from `ANCHORAGE_API_KEY` (or `ANCHORAGE_API_ACCESS_KEY`). Reads only; signed writes are out of scope.
 - `FIREBLOCKS_SECRET_KEY` and `ATB_PRIVATE_KEY` can use real newlines or escaped `\n` sequences.
 - Keep all secrets server-side only.
 
@@ -81,11 +88,13 @@ BITGO_MOCKOON_BASE_URL=http://127.0.0.1:9003
 ATB_MOCKOON_BASE_URL=http://127.0.0.1:9004
 ALLNODES_MOCKOON_BASE_URL=http://127.0.0.1:9005
 LEDGER_MOCKOON_BASE_URL=http://127.0.0.1:9006
+ANCHORAGE_MOCKOON_BASE_URL=http://127.0.0.1:9007
 ```
 
-Docker Compose publishes the proxies (`:8080`–`:8086`), not the Mockoon ports.
+Docker Compose publishes the proxies (`:8080`–`:8087`), not the Mockoon ports.
 Namespace only — RelayForge paths already include `/v1`, `/api/v2`, `/fdx`,
-Allnodes chain (`/eth`, `/btc`, …), and Ledger Vault paths (`/accounts`, …):
+Allnodes chain (`/eth`, `/btc`, …), Ledger Vault paths (`/accounts`, …), and
+Anchorage Digital v2 paths (`/v2/...`):
 
 ```bash
 FIREBLOCKS_MOCKOON_BASE_URL=http://127.0.0.1:8081/_mock/ns/local
@@ -95,6 +104,7 @@ BITGO_MOCKOON_BASE_URL=http://127.0.0.1:8083/_mock/ns/local
 ATB_MOCKOON_BASE_URL=http://127.0.0.1:8084/_mock/ns/local
 ALLNODES_MOCKOON_BASE_URL=http://127.0.0.1:8085/_mock/ns/local
 LEDGER_MOCKOON_BASE_URL=http://127.0.0.1:8086/_mock/ns/local
+ANCHORAGE_MOCKOON_BASE_URL=http://127.0.0.1:8087/_mock/ns/local
 ```
 
 Query `{ "scenario": "stale" }` selects a catalog scenario against host Mockoon.
@@ -327,6 +337,65 @@ curl -sS http://localhost:3000/api/request \
   }'
 ```
 
+## Anchorage
+
+Anchorage Digital API v2 serves the same `/v2/asset-types`, `/v2/vaults`,
+`/v2/wallets/{id}`, and `/v2/transactions` paths in both modes, so a preset
+works against staging and the mock without edits. This is the official
+`api.anchorage-staging.com` / `api.anchorage.com` prefix, the same surface
+unity-backend's AnchorageSDK uses.
+
+| | Base URL |
+| --- | --- |
+| Staging | `https://api.anchorage-staging.com` |
+| Production | `https://api.anchorage.com` |
+| Mock | `http://127.0.0.1:9007` |
+
+Set `ANCHORAGE_BASE_URL` to the host only. Paths keep their `/v2` prefix.
+Real mode sends `Api-Access-Key` from `ANCHORAGE_API_KEY` (or
+`ANCHORAGE_API_ACCESS_KEY`). Mockoon mode skips auth. Writes and token
+issuance are out of scope.
+
+Placeholders resolve per target:
+
+| Placeholder | Real | Mockoon |
+| --- | --- | --- |
+| `{vaultId}` | `ANCHORAGE_VAULT_ID` | `ANCHORAGE_MOCK_VAULT_ID` (`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`) |
+| `{walletId}` | `ANCHORAGE_WALLET_ID` | `ANCHORAGE_MOCK_WALLET_ID` (`11111111111111111111111111111111`) |
+| `{transactionId}` | `ANCHORAGE_TX_ID` | `ANCHORAGE_MOCK_TX_ID` (`aaaa0001000000000000000000000001`) |
+
+Start the mock from the `unity-dependencies` checkout:
+
+```bash
+npx @mockoon/cli@9.8.0 start --data mocks/anchorage/v1/mockoon.json --port 9007
+# or: make mock-anchorage-up
+# or: docker compose up --wait anchorage-mock anchorage-proxy
+```
+
+Host Mockoon is `http://127.0.0.1:9007`. Docker Compose mock-proxy is
+`http://127.0.0.1:8087/_mock/ns/<namespace>`.
+
+Ids the mock knows:
+
+- Vaults: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` (ETHSEP + PYUSD_SEP), `bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb` (BTC_S + SOL)
+- Wallets: `11…1` ETHSEP, `22…2` BTC_S, `33…3` empty, `44…4` archived ETH, `55…5` SOL + USDC_SOL
+- Transactions: `aaaa0001…` ETHSEP deposit, `bbbb0001…` ETHSEP withdraw, `cccc0001…` BTC, `eeee0001…` SOL, `ffff0001…` USDC_SOL, `550e8400…` partial
+
+Query `{ "scenario": "rate_limited" }` selects a catalog scenario on host
+Mockoon. Through the proxy, assign the namespace scenario via the admin API.
+
+```bash
+# Example: list asset types via the local mock
+curl -sS http://localhost:3000/api/request \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "provider": "anchorage",
+    "target": "mockoon",
+    "method": "GET",
+    "path": "/v2/asset-types"
+  }'
+```
+
 ## Run
 
 ```bash
@@ -343,6 +412,7 @@ Open `http://localhost:3000` and use the form to send requests such as:
 - ATB: `GET /fdx/5.3/accounts`
 - Allnodes: `POST /eth` with `{ "jsonrpc": "2.0", "id": 1, "method": "eth_chainId", "params": [] }`
 - Ledger: `GET /accounts`
+- Anchorage: `GET /v2/asset-types`
 
 ## How it works
 

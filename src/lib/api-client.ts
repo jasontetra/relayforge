@@ -14,6 +14,13 @@ const DEFAULT_ALLIUM_BASE_URL = 'https://api.allium.so';
 const DEFAULT_COINAPI_BASE_URL = 'https://rest.coinapi.io';
 const DEFAULT_BITGO_BASE_URL = 'https://app.bitgo.com';
 const DEFAULT_LEDGER_BASE_URL = 'https://api.vault.ledger.com';
+const DEFAULT_ANCHORAGE_BASE_URL = 'https://api.anchorage-staging.com';
+const ANCHORAGE_VAULT_PLACEHOLDER = '{vaultId}';
+const ANCHORAGE_WALLET_PLACEHOLDER = '{walletId}';
+const ANCHORAGE_TX_PLACEHOLDER = '{transactionId}';
+const DEFAULT_ANCHORAGE_MOCK_VAULT_ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const DEFAULT_ANCHORAGE_MOCK_WALLET_ID = '11111111111111111111111111111111';
+const DEFAULT_ANCHORAGE_MOCK_TX_ID = 'aaaa0001000000000000000000000001';
 const LEDGER_AUTH_RENEW_BEFORE_MS = 60 * 1000;
 const LEDGER_ACCOUNT_PLACEHOLDER = '{accountId}';
 const LEDGER_ENTITY_PLACEHOLDER = '{entityId}';
@@ -107,7 +114,8 @@ export type ProviderId =
   | 'bitgo'
   | 'atb'
   | 'allnodes'
-  | 'ledger';
+  | 'ledger'
+  | 'anchorage';
 export type ServerTarget = 'real' | 'mockoon' | 'both';
 export type ForwardTarget = Exclude<ServerTarget, 'both'>;
 
@@ -130,6 +138,7 @@ const MOCKOON_BASE_URL_ENV: Record<ProviderId, string> = {
   atb: 'ATB_MOCKOON_BASE_URL',
   allnodes: 'ALLNODES_MOCKOON_BASE_URL',
   ledger: 'LEDGER_MOCKOON_BASE_URL',
+  anchorage: 'ANCHORAGE_MOCKOON_BASE_URL',
 };
 
 function getEnv(name: string): string {
@@ -583,6 +592,49 @@ function resolveLedgerIds(
   };
 }
 
+function resolveAnchorageIds(
+  path: string,
+  query: ApiRequestInput['query'],
+  target: ForwardTarget,
+): { path: string; query: ApiRequestInput['query'] } {
+  const haystack = `${path}\n${JSON.stringify(query ?? {})}`;
+  const vars: Record<string, string> = {};
+
+  if (placeholderNeeded(haystack, ANCHORAGE_VAULT_PLACEHOLDER)) {
+    vars.vaultId = ledgerPlaceholderValue(
+      target,
+      'ANCHORAGE_VAULT_ID',
+      'ANCHORAGE_MOCK_VAULT_ID',
+      DEFAULT_ANCHORAGE_MOCK_VAULT_ID,
+    );
+  }
+  if (placeholderNeeded(haystack, ANCHORAGE_WALLET_PLACEHOLDER)) {
+    vars.walletId = ledgerPlaceholderValue(
+      target,
+      'ANCHORAGE_WALLET_ID',
+      'ANCHORAGE_MOCK_WALLET_ID',
+      DEFAULT_ANCHORAGE_MOCK_WALLET_ID,
+    );
+  }
+  if (placeholderNeeded(haystack, ANCHORAGE_TX_PLACEHOLDER)) {
+    vars.transactionId = ledgerPlaceholderValue(
+      target,
+      'ANCHORAGE_TX_ID',
+      'ANCHORAGE_MOCK_TX_ID',
+      DEFAULT_ANCHORAGE_MOCK_TX_ID,
+    );
+  }
+
+  if (Object.keys(vars).length === 0) {
+    return { path, query };
+  }
+
+  return {
+    path: String(applyPlaceholders(path, vars)),
+    query: applyPlaceholders(query, vars) as ApiRequestInput['query'],
+  };
+}
+
 function resolveProviderPlaceholders(
   provider: ProviderId,
   path: string,
@@ -597,6 +649,9 @@ function resolveProviderPlaceholders(
   }
   if (provider === 'ledger') {
     return resolveLedgerIds(normalizePath(path), query, target);
+  }
+  if (provider === 'anchorage') {
+    return resolveAnchorageIds(normalizePath(path), query, target);
   }
   return { path: normalizePath(path), query };
 }
@@ -993,6 +1048,10 @@ function getTargetBaseUrl(provider: ProviderId, target: ForwardTarget): string {
     return process.env.LEDGER_BASE_URL?.trim() || DEFAULT_LEDGER_BASE_URL;
   }
 
+  if (provider === 'anchorage') {
+    return process.env.ANCHORAGE_BASE_URL?.trim() || DEFAULT_ANCHORAGE_BASE_URL;
+  }
+
   return process.env.BITGO_BASE_URL?.trim() || DEFAULT_BITGO_BASE_URL;
 }
 
@@ -1100,6 +1159,15 @@ function buildHeaders({
     throw new Error(
       'Set LEDGER_API_KEY_ID, LEDGER_API_KEY_SECRET, and LEDGER_WORKSPACE (or LEDGER_VAULT_NAME) for live Vault token auth. Alternatively set LEDGER_ACCESS_TOKEN, or LEDGER_API_USER for LAM headers.',
     );
+  }
+
+  if (provider === 'anchorage') {
+    headers.Accept = 'application/json';
+    headers['Api-Access-Key'] = getEnvAny(
+      'ANCHORAGE_API_KEY',
+      'ANCHORAGE_API_ACCESS_KEY',
+    );
+    return Promise.resolve(headers);
   }
 
   return Promise.resolve(headers);
