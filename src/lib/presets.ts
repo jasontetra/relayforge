@@ -22,7 +22,8 @@ export type ProviderId =
   | 'atb'
   | 'allnodes'
   | 'ledger'
-  | 'anchorage';
+  | 'anchorage'
+  | 'coinbase';
 
 export const fireblockPresetsGrouped: PresetGroup[] = [
   {
@@ -911,6 +912,165 @@ export const anchoragePresetsGrouped: PresetGroup[] = [
   },
 ];
 
+const CB_PORTFOLIO = '{portfolioId}';
+const CB_ENTITY = '{entityId}';
+const CB_WALLET = '{walletId}';
+const CB_TX = '{transactionId}';
+const CB_WALLET_BTC = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0002';
+const CB_TX_WITHDRAW = 'dddddddd-dddd-4ddd-8ddd-dddddddd0002';
+
+export const coinbasePresetsGrouped: PresetGroup[] = [
+  {
+    category: 'Portfolio',
+    presets: [
+      {
+        label: 'List Portfolios',
+        provider: 'coinbase',
+        method: 'GET',
+        path: '/v1/portfolios',
+      },
+      {
+        label: 'Get Portfolio',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}`,
+      },
+    ],
+  },
+  {
+    category: 'Wallets',
+    presets: [
+      {
+        label: 'List Wallets',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/wallets`,
+      },
+      {
+        label: 'List Wallets Page 2',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/wallets`,
+        query: '{\n  "cursor": "cb-wallets-2"\n}',
+      },
+      {
+        label: 'List ETH Wallets',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/wallets`,
+        query: '{\n  "symbols": "ETH"\n}',
+      },
+      {
+        label: 'Get Wallet',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/wallets/${CB_WALLET}`,
+      },
+      {
+        label: 'Get Wallet Balance',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/wallets/${CB_WALLET}/balance`,
+      },
+      {
+        label: 'List Wallet Addresses',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/wallets/${CB_WALLET}/addresses`,
+      },
+    ],
+  },
+  {
+    category: 'Transactions',
+    presets: [
+      {
+        label: 'List Transactions',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/transactions`,
+        query:
+          '{\n  "start_time": "2026-06-24T00:00:00.000Z",\n  "end_time": "2026-06-25T00:00:00.000Z"\n}',
+      },
+      {
+        label: 'List Transactions Page 2',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/transactions`,
+        query: '{\n  "cursor": "cb-tx-2"\n}',
+      },
+      {
+        label: 'Get Transaction',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/transactions/${CB_TX}`,
+      },
+      {
+        label: 'Get BTC Withdrawal',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/transactions/${CB_TX_WITHDRAW}`,
+      },
+      {
+        label: 'List Wallet Transactions',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/wallets/${CB_WALLET}/transactions`,
+      },
+      {
+        label: 'List BTC Wallet Transactions',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/wallets/${CB_WALLET_BTC}/transactions`,
+      },
+    ],
+  },
+  {
+    category: 'Activity',
+    presets: [
+      {
+        label: 'List Portfolio Users',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/users`,
+      },
+      {
+        label: 'List Entity Users',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/entities/${CB_ENTITY}/users`,
+      },
+      {
+        label: 'List Entity Assets',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/entities/${CB_ENTITY}/assets`,
+      },
+      {
+        label: 'List Orders',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/orders`,
+        query:
+          '{\n  "start_date": "2026-06-24T00:00:00.000Z",\n  "end_date": "2026-06-25T00:00:00.000Z"\n}',
+      },
+      {
+        label: 'List Activities',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/activities`,
+        query:
+          '{\n  "start_time": "2026-06-24T00:00:00.000Z",\n  "end_time": "2026-06-25T00:00:00.000Z"\n}',
+      },
+      {
+        label: 'List Address Book',
+        provider: 'coinbase',
+        method: 'GET',
+        path: `/v1/portfolios/${CB_PORTFOLIO}/address_book`,
+      },
+    ],
+  },
+];
+
 // Flatten grouped presets for backward compatibility
 export const allPresets: Preset[] = [
   ...fireblockPresetsGrouped.flatMap((g) => g.presets),
@@ -921,6 +1081,7 @@ export const allPresets: Preset[] = [
   ...allnodesPresetsGrouped.flatMap((g) => g.presets),
   ...ledgerPresetsGrouped.flatMap((g) => g.presets),
   ...anchoragePresetsGrouped.flatMap((g) => g.presets),
+  ...coinbasePresetsGrouped.flatMap((g) => g.presets),
 ];
 
 // Grouped presets by provider
@@ -933,4 +1094,5 @@ export const presetsGroupedByProvider: Record<ProviderId, PresetGroup[]> = {
   allnodes: allnodesPresetsGrouped,
   ledger: ledgerPresetsGrouped,
   anchorage: anchoragePresetsGrouped,
+  coinbase: coinbasePresetsGrouped,
 };

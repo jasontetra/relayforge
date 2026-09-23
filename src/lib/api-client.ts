@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { createHash, createPrivateKey, randomUUID, type KeyObject } from 'node:crypto';
+import { createHash, createHmac, createPrivateKey, randomUUID, type KeyObject } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,6 +15,16 @@ const DEFAULT_COINAPI_BASE_URL = 'https://rest.coinapi.io';
 const DEFAULT_BITGO_BASE_URL = 'https://app.bitgo.com';
 const DEFAULT_LEDGER_BASE_URL = 'https://api.vault.ledger.com';
 const DEFAULT_ANCHORAGE_BASE_URL = 'https://api.anchorage-staging.com';
+const DEFAULT_COINBASE_BASE_URL = 'https://api.prime.coinbase.com';
+const COINBASE_PORTFOLIO_PLACEHOLDER = '{portfolioId}';
+const COINBASE_ENTITY_PLACEHOLDER = '{entityId}';
+const COINBASE_WALLET_PLACEHOLDER = '{walletId}';
+const COINBASE_TX_PLACEHOLDER = '{transactionId}';
+const DEFAULT_COINBASE_MOCK_PORTFOLIO_ID =
+  '11111111-1111-4111-8111-111111111111';
+const DEFAULT_COINBASE_MOCK_ENTITY_ID = '22222222-2222-4222-8222-222222222222';
+const DEFAULT_COINBASE_MOCK_WALLET_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0001';
+const DEFAULT_COINBASE_MOCK_TX_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddd0001';
 const ANCHORAGE_VAULT_PLACEHOLDER = '{vaultId}';
 const ANCHORAGE_WALLET_PLACEHOLDER = '{walletId}';
 const ANCHORAGE_TX_PLACEHOLDER = '{transactionId}';
@@ -115,7 +125,8 @@ export type ProviderId =
   | 'atb'
   | 'allnodes'
   | 'ledger'
-  | 'anchorage';
+  | 'anchorage'
+  | 'coinbase';
 export type ServerTarget = 'real' | 'mockoon' | 'both';
 export type ForwardTarget = Exclude<ServerTarget, 'both'>;
 
@@ -139,6 +150,7 @@ const MOCKOON_BASE_URL_ENV: Record<ProviderId, string> = {
   allnodes: 'ALLNODES_MOCKOON_BASE_URL',
   ledger: 'LEDGER_MOCKOON_BASE_URL',
   anchorage: 'ANCHORAGE_MOCKOON_BASE_URL',
+  coinbase: 'COINBASE_MOCKOON_BASE_URL',
 };
 
 function getEnv(name: string): string {
@@ -635,6 +647,57 @@ function resolveAnchorageIds(
   };
 }
 
+function resolveCoinbaseIds(
+  path: string,
+  query: ApiRequestInput['query'],
+  target: ForwardTarget,
+): { path: string; query: ApiRequestInput['query'] } {
+  const haystack = `${path}\n${JSON.stringify(query ?? {})}`;
+  const vars: Record<string, string> = {};
+
+  if (placeholderNeeded(haystack, COINBASE_PORTFOLIO_PLACEHOLDER)) {
+    vars.portfolioId = ledgerPlaceholderValue(
+      target,
+      'COINBASE_PORTFOLIO_ID',
+      'COINBASE_MOCK_PORTFOLIO_ID',
+      DEFAULT_COINBASE_MOCK_PORTFOLIO_ID,
+    );
+  }
+  if (placeholderNeeded(haystack, COINBASE_ENTITY_PLACEHOLDER)) {
+    vars.entityId = ledgerPlaceholderValue(
+      target,
+      'COINBASE_ENTITY_ID',
+      'COINBASE_MOCK_ENTITY_ID',
+      DEFAULT_COINBASE_MOCK_ENTITY_ID,
+    );
+  }
+  if (placeholderNeeded(haystack, COINBASE_WALLET_PLACEHOLDER)) {
+    vars.walletId = ledgerPlaceholderValue(
+      target,
+      'COINBASE_WALLET_ID',
+      'COINBASE_MOCK_WALLET_ID',
+      DEFAULT_COINBASE_MOCK_WALLET_ID,
+    );
+  }
+  if (placeholderNeeded(haystack, COINBASE_TX_PLACEHOLDER)) {
+    vars.transactionId = ledgerPlaceholderValue(
+      target,
+      'COINBASE_TX_ID',
+      'COINBASE_MOCK_TX_ID',
+      DEFAULT_COINBASE_MOCK_TX_ID,
+    );
+  }
+
+  if (Object.keys(vars).length === 0) {
+    return { path, query };
+  }
+
+  return {
+    path: String(applyPlaceholders(path, vars)),
+    query: applyPlaceholders(query, vars) as ApiRequestInput['query'],
+  };
+}
+
 function resolveProviderPlaceholders(
   provider: ProviderId,
   path: string,
@@ -652,6 +715,9 @@ function resolveProviderPlaceholders(
   }
   if (provider === 'anchorage') {
     return resolveAnchorageIds(normalizePath(path), query, target);
+  }
+  if (provider === 'coinbase') {
+    return resolveCoinbaseIds(normalizePath(path), query, target);
   }
   return { path: normalizePath(path), query };
 }
@@ -1052,17 +1118,39 @@ function getTargetBaseUrl(provider: ProviderId, target: ForwardTarget): string {
     return process.env.ANCHORAGE_BASE_URL?.trim() || DEFAULT_ANCHORAGE_BASE_URL;
   }
 
+  if (provider === 'coinbase') {
+    return process.env.COINBASE_BASE_URL?.trim() || DEFAULT_COINBASE_BASE_URL;
+  }
+
   return process.env.BITGO_BASE_URL?.trim() || DEFAULT_BITGO_BASE_URL;
+}
+
+function signCoinbasePrime(
+  method: string,
+  requestPath: string,
+  bodyText: string,
+): { signature: string; timestamp: string } {
+  // Same prehash as @tetratrust/coinbase-prime-api ConfigurationService,
+  // which unity-backend uses: timestamp + METHOD + path + body.
+  // The signing key is the secret string, not its base64 decoding, and the
+  // query string is not part of the prehash.
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = createHmac('sha256', getEnv('COINBASE_SECRET'))
+    .update(`${timestamp}${method.toUpperCase()}${requestPath}${bodyText}`)
+    .digest('base64');
+  return { signature, timestamp };
 }
 
 function buildHeaders({
   provider,
+  method,
   target,
   pathWithQuery,
   body,
   bodyText,
 }: {
   provider: ProviderId;
+  method: RequestMethod;
   target: ForwardTarget;
   pathWithQuery: string;
   body: unknown;
@@ -1170,6 +1258,20 @@ function buildHeaders({
     return Promise.resolve(headers);
   }
 
+  if (provider === 'coinbase') {
+    const { signature, timestamp } = signCoinbasePrime(
+      method,
+      pathWithQuery.split('?')[0],
+      bodyText,
+    );
+    headers.Accept = 'application/json';
+    headers['X-CB-ACCESS-KEY'] = getEnv('COINBASE_KEY');
+    headers['X-CB-ACCESS-PASSPHRASE'] = getEnv('COINBASE_PASSPHRASE');
+    headers['X-CB-ACCESS-SIGNATURE'] = signature;
+    headers['X-CB-ACCESS-TIMESTAMP'] = timestamp;
+    return Promise.resolve(headers);
+  }
+
   return Promise.resolve(headers);
 }
 
@@ -1255,11 +1357,20 @@ export async function callApi({
   const bodyText = serializeBody(resolvedBody);
   const headers = await buildHeaders({
     provider,
+    method,
     target,
     pathWithQuery: `${normalizedPath}${url.search}`,
     body: resolvedBody,
     bodyText,
   });
+
+  if (provider === 'coinbase' && target === 'mockoon') {
+    const scenario = resolvedQuery?.scenario;
+    headers['X-Unity-Mock-Scenario'] =
+      typeof scenario === 'string' && scenario.trim()
+        ? scenario.trim()
+        : 'success';
+  }
 
   if (basicAuth) {
     headers.Authorization = basicAuth;

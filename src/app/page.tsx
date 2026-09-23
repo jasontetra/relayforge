@@ -105,6 +105,14 @@ const providerInfo: Record<
       'Digital API v2 reads (GET /v2/asset-types, /v2/vaults, /v2/vaults/{vaultId}, /v2/vaults/{vaultId}/wallets, /v2/wallets/{walletId}, /v2/transactions, /v2/transactions/{id}). Live auth is Api-Access-Key (ANCHORAGE_API_KEY). Mockoon is ANCHORAGE_MOCKOON_BASE_URL: host Mockoon http://127.0.0.1:9007, or Docker proxy http://127.0.0.1:8087/_mock/ns/<namespace>. Placeholders {vaultId}, {walletId}, and {transactionId} resolve per target. Vault 1 is ETHSEP + PYUSD_SEP (wallets 01/03/04); vault 2 is BTC_S native-only plus SOL + USDC_SOL. In-flight withdrawals use INPROGRESS. Query { "scenario": "rate_limited" } selects a catalog scenario on host Mockoon. Writes are out of scope.',
     authSummary: 'Api-Access-Key',
   },
+  coinbase: {
+    label: 'Coinbase Prime',
+    defaultMethod: 'GET',
+    defaultPath: '/v1/portfolios/{portfolioId}',
+    notes:
+      'Prime REST reads (GET /v1/portfolios, wallets, balances, transactions, users, orders, activities, address book, entity assets). Real mode signs X-CB-ACCESS-KEY, PASSPHRASE, SIGNATURE, and TIMESTAMP from COINBASE_KEY, COINBASE_PASSPHRASE, and COINBASE_SECRET, matching the unity-backend client. Mockoon is COINBASE_MOCKOON_BASE_URL: host Mockoon http://127.0.0.1:9008, or Docker proxy http://127.0.0.1:8088/_mock/ns/<namespace>. Mockoon mode sends X-Unity-Mock-Scenario (success unless Query includes scenario) so wallet routes and cursor pages match. Placeholders {portfolioId}, {entityId}, {walletId}, and {transactionId} resolve per target. Page-2 cursors (cb-wallets-2, cb-tx-2) are mock tokens.',
+    authSummary: 'X-CB-ACCESS HMAC',
+  },
 };
 
 const exampleQuery = '{\n  "limit": 10\n}';

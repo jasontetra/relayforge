@@ -52,6 +52,15 @@ ANCHORAGE_API_KEY=your-anchorage-api-access-key
 ANCHORAGE_VAULT_ID=
 ANCHORAGE_WALLET_ID=
 ANCHORAGE_TX_ID=
+
+COINBASE_BASE_URL=https://api.prime.coinbase.com
+COINBASE_KEY=your-coinbase-access-key
+COINBASE_PASSPHRASE=your-coinbase-passphrase
+COINBASE_SECRET=your-coinbase-signing-key
+COINBASE_PORTFOLIO_ID=
+COINBASE_ENTITY_ID=
+COINBASE_WALLET_ID=
+COINBASE_TX_ID=
 ```
 
 Notes:
@@ -65,6 +74,7 @@ Notes:
 - Allnodes real mode posts JSON-RPC to the per-chain RPC URL. Defaults are Allnodes PublicNode. Dedicated URLs may include `user:pass` (sent as HTTP Basic).
 - Ledger real mode posts `POST /auth/token` with `LEDGER_API_KEY_ID` + `LEDGER_API_KEY_SECRET` and header `X-Ledger-Workspace` (`LEDGER_WORKSPACE` or `LEDGER_VAULT_NAME`), then sends `Authorization: Bearer` on Vault routes. Optional fallbacks: `LEDGER_ACCESS_TOKEN`, or LAM headers `LEDGER_API_USER` / `LEDGER_API_KEY`.
 - Anchorage real mode sends `Api-Access-Key` from `ANCHORAGE_API_KEY` (or `ANCHORAGE_API_ACCESS_KEY`). Reads only; signed writes are out of scope.
+- Coinbase Prime real mode sends `X-CB-ACCESS-KEY`, `X-CB-ACCESS-PASSPHRASE`, `X-CB-ACCESS-SIGNATURE`, and `X-CB-ACCESS-TIMESTAMP`. The signature matches the unity-backend Prime client: HMAC-SHA256 of `timestamp + METHOD + path + body`, keyed by `COINBASE_SECRET` as a string. The query string is not part of the prehash.
 - `FIREBLOCKS_SECRET_KEY` and `ATB_PRIVATE_KEY` can use real newlines or escaped `\n` sequences.
 - Keep all secrets server-side only.
 
@@ -89,9 +99,10 @@ ATB_MOCKOON_BASE_URL=http://127.0.0.1:9004
 ALLNODES_MOCKOON_BASE_URL=http://127.0.0.1:9005
 LEDGER_MOCKOON_BASE_URL=http://127.0.0.1:9006
 ANCHORAGE_MOCKOON_BASE_URL=http://127.0.0.1:9007
+COINBASE_MOCKOON_BASE_URL=http://127.0.0.1:9008
 ```
 
-Docker Compose publishes the proxies (`:8080`–`:8087`), not the Mockoon ports.
+Docker Compose publishes the proxies (`:8080`–`:8088`), not the Mockoon ports.
 Namespace only — RelayForge paths already include `/v1`, `/api/v2`, `/fdx`,
 Allnodes chain (`/eth`, `/btc`, …), Ledger Vault paths (`/accounts`, …), and
 Anchorage Digital v2 paths (`/v2/...`):
@@ -105,6 +116,7 @@ ATB_MOCKOON_BASE_URL=http://127.0.0.1:8084/_mock/ns/local
 ALLNODES_MOCKOON_BASE_URL=http://127.0.0.1:8085/_mock/ns/local
 LEDGER_MOCKOON_BASE_URL=http://127.0.0.1:8086/_mock/ns/local
 ANCHORAGE_MOCKOON_BASE_URL=http://127.0.0.1:8087/_mock/ns/local
+COINBASE_MOCKOON_BASE_URL=http://127.0.0.1:8088/_mock/ns/local
 ```
 
 Query `{ "scenario": "stale" }` selects a catalog scenario against host Mockoon.
@@ -396,6 +408,67 @@ curl -sS http://localhost:3000/api/request \
   }'
 ```
 
+## Coinbase Prime
+
+Coinbase Prime serves the same `/v1/portfolios/...` and `/v1/entities/...` reads
+in both modes, so a preset works against the live API and the mock without
+edits. This is the surface unity-backend's Coinbase plugin calls.
+
+| | Base URL |
+| --- | --- |
+| Production | `https://api.prime.coinbase.com` |
+| Mock | `http://127.0.0.1:9008` |
+
+Set `COINBASE_BASE_URL` to the host only. Paths keep their `/v1` prefix. Real
+mode signs `X-CB-ACCESS-KEY`, `X-CB-ACCESS-PASSPHRASE`, `X-CB-ACCESS-SIGNATURE`,
+and `X-CB-ACCESS-TIMESTAMP` from `COINBASE_KEY`, `COINBASE_PASSPHRASE`, and
+`COINBASE_SECRET`. Mockoon mode skips those headers and sends
+`X-Unity-Mock-Scenario` (`success`, or the Query `scenario` value) so wallet
+routes and cursor pages select the same bodies the proxy selects.
+
+Placeholders resolve per target:
+
+| Placeholder | Real | Mockoon |
+| --- | --- | --- |
+| `{portfolioId}` | `COINBASE_PORTFOLIO_ID` | `COINBASE_MOCK_PORTFOLIO_ID` (`11111111-1111-4111-8111-111111111111`) |
+| `{entityId}` | `COINBASE_ENTITY_ID` | `COINBASE_MOCK_ENTITY_ID` (`22222222-2222-4222-8222-222222222222`) |
+| `{walletId}` | `COINBASE_WALLET_ID` | `COINBASE_MOCK_WALLET_ID` (`aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0001`, ETH) |
+| `{transactionId}` | `COINBASE_TX_ID` | `COINBASE_MOCK_TX_ID` (`dddddddd-dddd-4ddd-8ddd-dddddddd0001`, ETH deposit) |
+
+Start the mock from the `unity-dependencies` checkout:
+
+```bash
+npx @mockoon/cli@9.8.0 start --data mocks/coinbase/v1/mockoon.json --port 9008
+# or: make mock-coinbase-up
+# or: docker compose up --wait coinbase-mock coinbase-proxy
+```
+
+Host Mockoon is `http://127.0.0.1:9008`. Docker Compose mock-proxy is
+`http://127.0.0.1:8088/_mock/ns/<namespace>`.
+
+Ids the mock knows:
+
+- Portfolio: `11111111-1111-4111-8111-111111111111`
+- Entity: `22222222-2222-4222-8222-222222222222`
+- Wallets: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0001` (ETH), `bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0002` (BTC), `cccccccc-cccc-4ccc-8ccc-cccccccc0003` (SOL)
+- Transactions: `dddddddd-dddd-4ddd-8ddd-dddddddd0001` (ETH deposit) through `…0005` (internal)
+
+Page-2 cursors such as `cb-wallets-2` and `cb-tx-2` are mock tokens. Query
+`{ "scenario": "rate_limited" }` selects a catalog scenario on host Mockoon.
+Through the proxy, assign the namespace scenario via the admin API.
+
+```bash
+# Example: get the synthetic portfolio via the local mock
+curl -sS http://localhost:3000/api/request \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "provider": "coinbase",
+    "target": "mockoon",
+    "method": "GET",
+    "path": "/v1/portfolios/{portfolioId}"
+  }'
+```
+
 ## Run
 
 ```bash
@@ -413,6 +486,7 @@ Open `http://localhost:3000` and use the form to send requests such as:
 - Allnodes: `POST /eth` with `{ "jsonrpc": "2.0", "id": 1, "method": "eth_chainId", "params": [] }`
 - Ledger: `GET /accounts`
 - Anchorage: `GET /v2/asset-types`
+- Coinbase Prime: `GET /v1/portfolios/{portfolioId}`
 
 ## How it works
 
