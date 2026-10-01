@@ -163,6 +163,21 @@ function parseJsonField(label: string, value: string) {
   }
 }
 
+function requestFromPageUrl(pageUrl: string) {
+  const url = new URL(pageUrl, 'https://placeholder.local');
+  const query: Record<string, string> = {};
+  url.searchParams.forEach((value, key) => {
+    query[key] = value;
+  });
+
+  return {
+    method: 'GET' as const,
+    path: url.pathname,
+    queryText: JSON.stringify(query, null, 2),
+    bodyText: '',
+  };
+}
+
 export default function Home() {
   const [provider, setProvider] = useState<ProviderId>('fireblocks');
   const [target, setTarget] = useState<ServerTarget>('real');
@@ -206,12 +221,30 @@ export default function Home() {
     setSelectedPreset(preset);
   }
 
-  async function submitRequest() {
+  async function submitRequest(overrides?: {
+    method: RequestMethod;
+    path: string;
+    queryText: string;
+    bodyText: string;
+  }) {
+    const requestMethod = overrides?.method ?? method;
+    const requestPath = overrides?.path ?? path;
+    const requestQueryText = overrides?.queryText ?? queryText;
+    const requestBodyText = overrides?.bodyText ?? bodyText;
+
+    if (overrides) {
+      setMethod(overrides.method);
+      setPath(overrides.path);
+      setQueryText(overrides.queryText);
+      setBodyText(overrides.bodyText);
+      setSelectedPreset(null);
+    }
+
     try {
       setClientError(null);
 
-      const query = parseJsonField('Query', queryText);
-      const body = parseJsonField('Body', bodyText);
+      const query = parseJsonField('Query', requestQueryText);
+      const body = parseJsonField('Body', requestBodyText);
 
       const result = await fetch('/api/request', {
         method: 'POST',
@@ -221,8 +254,8 @@ export default function Home() {
         body: JSON.stringify({
           provider,
           target,
-          method,
-          path,
+          method: requestMethod,
+          path: requestPath,
           query,
           body,
         }),
@@ -234,6 +267,10 @@ export default function Home() {
       setResponse(null);
       setClientError(error instanceof Error ? error.message : 'Unknown error');
     }
+  }
+
+  function followPageUrl(pageUrl: string) {
+    return submitRequest(requestFromPageUrl(pageUrl));
   }
 
   return (
@@ -478,9 +515,44 @@ export default function Home() {
                     key={group.title}
                     className='mt-5 rounded-[1.5rem] border border-white/10 bg-black/30 p-4'
                   >
-                    <p className='text-xs uppercase tracking-[0.22em] text-stone-400'>
-                      {group.title}
-                    </p>
+                    <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+                      <p className='text-xs uppercase tracking-[0.22em] text-stone-400'>
+                        {group.title}
+                      </p>
+                      {group.headers['prev-page']?.trim() ||
+                      group.headers['next-page']?.trim() ? (
+                        <div className='flex gap-2'>
+                          {group.headers['prev-page']?.trim() ? (
+                            <button
+                              type='button'
+                              onClick={() =>
+                                startTransition(() =>
+                                  followPageUrl(group.headers['prev-page']),
+                                )
+                              }
+                              disabled={isPending}
+                              className='inline-flex h-9 items-center justify-center rounded-full bg-amber-300 px-4 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-500 disabled:text-stone-200'
+                            >
+                              {isPending ? 'Running...' : 'Prev page'}
+                            </button>
+                          ) : null}
+                          {group.headers['next-page']?.trim() ? (
+                            <button
+                              type='button'
+                              onClick={() =>
+                                startTransition(() =>
+                                  followPageUrl(group.headers['next-page']),
+                                )
+                              }
+                              disabled={isPending}
+                              className='inline-flex h-9 items-center justify-center rounded-full bg-amber-300 px-4 text-sm font-semibold text-stone-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-stone-500 disabled:text-stone-200'
+                            >
+                              {isPending ? 'Running...' : 'Next page'}
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                     <dl className='mt-3 space-y-2 font-mono text-sm leading-6'>
                       {Object.entries(group.headers).map(([key, value]) => (
                         <div key={key}>
