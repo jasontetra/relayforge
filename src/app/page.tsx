@@ -13,6 +13,7 @@ type ApiResponse = {
   status?: number;
   statusText?: string;
   error?: string;
+  headers?: Record<string, string>;
   data?: unknown;
 };
 
@@ -118,6 +119,29 @@ const providerInfo: Record<
 const exampleQuery = '{\n  "limit": 10\n}';
 const exampleBody =
   '{\n  "assetId": "ETH_TEST3",\n  "amount": "0.01",\n  "source": {\n    "type": "VAULT_ACCOUNT",\n    "id": "0"\n  },\n  "destination": {\n    "type": "ONE_TIME_ADDRESS",\n    "oneTimeAddress": {\n      "address": "0x0000000000000000000000000000000000000000"\n    }\n  }\n}';
+
+function responseHeaderGroups(response: ApiResponse) {
+  if (response.headers && Object.keys(response.headers).length > 0) {
+    return [{ title: 'Response headers', headers: response.headers }];
+  }
+
+  if (!response.data || typeof response.data !== 'object') {
+    return [];
+  }
+
+  const compared = response.data as {
+    mockoon?: ApiResponse;
+    real?: ApiResponse;
+  };
+  return [
+    { title: 'Mockoon headers', headers: compared.mockoon?.headers },
+    { title: 'Real headers', headers: compared.real?.headers },
+  ].flatMap((group) =>
+    group.headers && Object.keys(group.headers).length > 0
+      ? [{ title: group.title, headers: group.headers }]
+      : [],
+  );
+}
 
 function formatJson(value: unknown) {
   if (typeof value === 'string') {
@@ -447,6 +471,35 @@ export default function Home() {
                 )}
               </div>
             </div>
+
+            {response
+              ? responseHeaderGroups(response).map((group) => (
+                  <div
+                    key={group.title}
+                    className='mt-5 rounded-[1.5rem] border border-white/10 bg-black/30 p-4'
+                  >
+                    <p className='text-xs uppercase tracking-[0.22em] text-stone-400'>
+                      {group.title}
+                    </p>
+                    <dl className='mt-3 space-y-2 font-mono text-sm leading-6'>
+                      {Object.entries(group.headers).map(([key, value]) => (
+                        <div key={key}>
+                          <dt
+                            className={
+                              key === 'next-page' || key === 'prev-page'
+                                ? 'text-amber-300'
+                                : 'text-stone-400'
+                            }
+                          >
+                            {key}
+                          </dt>
+                          <dd className='break-all text-teal-100'>{value || '—'}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                ))
+              : null}
 
             <div className='mt-5 rounded-[1.5rem] border border-white/10 bg-black/30 p-4'>
               <pre className='max-h-[34rem] overflow-auto whitespace-pre-wrap break-words font-mono text-sm leading-6 text-teal-100'>

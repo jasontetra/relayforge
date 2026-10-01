@@ -1395,10 +1395,16 @@ export async function callApi({
     }
   }
 
+  const responseHeaders: Record<string, string> = {};
+  response.headers.forEach((value, key) => {
+    responseHeaders[key] = value;
+  });
+
   return {
     ok: response.ok,
     status: response.status,
     statusText: response.statusText,
+    headers: responseHeaders,
     data,
   };
 }
